@@ -165,11 +165,17 @@ export async function captureHudPreview(browser, base) {
       });
     }
     view.build.stage = "IDLE";
-    view.patches = samples.map((s, i) => ({
+    // This is explicitly a layout replay: duplicate saved card metadata under
+    // distinct preview IDs to exercise the late-stream keep layout.
+    view.patches = Array.from({ length: 12 }, (_, i) => ({
       id: `preview-${i}`,
-      title: s.card.title,
-      credits: s.card.credits,
+      title: samples[i % samples.length].card.title,
+      credits: samples[i % samples.length].card.credits,
     }));
+    await page.waitForTimeout(500);
+    await page.screenshot({
+      path: resolve("docs/media/hud/layout-preview-twelve-emblems.png"),
+    });
     await page.keyboard.press("h");
     await page.waitForTimeout(500);
     await page.screenshot({

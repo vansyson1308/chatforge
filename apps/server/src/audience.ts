@@ -7,6 +7,7 @@ import {
 } from "../../../packages/shared/src/chat.js";
 import { TwitchAuth } from "./twitch-auth.js";
 import { EventSub } from "./eventsub.js";
+import { formatCredit } from "../../../packages/shared/src/forge.js";
 import { IdeaInbox, ChatRouter, sanitize } from "./chat-router.js";
 import { ChatOut } from "./chat-out.js";
 import { CrowdSim } from "./crowd-sim.js";
@@ -76,10 +77,7 @@ export class Audience {
         command({
           type: "command",
           command: name,
-          viewer:
-            chat.source === "simulator"
-              ? `[SIM] ${chat.displayName}`
-              : chat.displayName,
+          viewer: formatCredit({ name: chat.displayName, source: chat.source }),
           args,
         }),
       reply: (text, source) => {
@@ -97,7 +95,10 @@ export class Audience {
           `${sanitize(event.displayName, 32)}: ${sanitize(event.text)} · ${result}`,
         );
       } else {
-        const viewer = `${event.source === "simulator" ? "[SIM] " : ""}${sanitize(event.viewer, 32)}`;
+        const viewer = formatCredit({
+          name: sanitize(event.viewer, 32),
+          source: event.source,
+        });
         this.record(label, `${event.type} · ${viewer} · ${event.count}`);
         command({
           type: "event",

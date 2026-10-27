@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+const testTempRoot = resolve(process.cwd(), "runtime/tmp");
+mkdirSync(testTempRoot, { recursive: true });
 import type { IncomingMessage } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { documentNavigation, localRequest } from "./local-http.js";
 import { ChatOut } from "./chat-out.js";
 import { CrowdSim } from "./crowd-sim.js";
@@ -64,7 +66,7 @@ describe("M2 real-live regressions", () => {
     ).toEqual(Buffer.from([0xe2, 0x9a, 0x92]));
   });
   it("continues RNG through toggles/restart and dedupes pending normalized ideas durably", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "chatforge-regression-"));
+    const dir = await mkdtemp(join(testTempRoot, "chatforge-regression-"));
     try {
       const file = join(dir, "ideas.sqlite");
       let db = new IdeaInbox(file);

@@ -8,8 +8,8 @@
 - M1 Engine, sandbox, seed game and Mod API: complete; lead QC approved.
 - M2 Twitch and Crowd Sim: complete; lead QC approved after a real Twitch live test on vansyson1308 (all seven subscriptions and real chat delivery verified).
 - M3 Forge loop: lead QC requested live checkpoint, parity, overlap and hygiene fixes; addressed together with M4.
-- M4 Overlay HUD, dashboard, Mod API v1.1 and game polish: current milestone; implementation, 3/3 real live soak and final verification delivered for lead QC. Scope in brief/prompts/P4_LIVE_FIXES_SPECTACLE_POLISH.md.
-- M5 Hardening, simulated-stream end-to-end test and performance.
+- M4 Overlay HUD, dashboard, Mod API v1.1 and game polish: follow-up QC fixes addressed alongside M5.
+- M5 Hardening, simulated-stream end-to-end test and performance: current milestone; verification in progress. Scope in brief/prompts/P5_POLISH_AND_HARDENING.md.
 - M6 Demo kit.
 
 Update this status when milestones change. Do not build ahead without an explicit request.
@@ -20,16 +20,18 @@ Target Windows 11, PowerShell, Node 24 and pnpm 10. Never write bash-only script
 
 - Install: `pnpm install --frozen-lockfile`
 - Dev: `pnpm dev` (builds, then starts localhost server, Vite overlay 5173 and React dashboard 5174)
-- Stream: `pnpm build`, then `pnpm start` (dashboard and overlay served on localhost:3000)
+- Stream: `pnpm stream` (builds, starts the local server and prints dashboard, overlay and OBS instructions)
 - Build: `pnpm build`
 - Typecheck: `pnpm typecheck`
 - Lint: `pnpm lint`
 - Test: `pnpm test` (sequential unit/security suites)
 - Performance: `pnpm test:perf` (isolated; do not run other checks concurrently)
 - Browser FPS: `pnpm test:fps` (requires a build and installed Chrome; starts/stops an isolated server; no downloads)
-- End-to-end: `pnpm test:e2e` (explicitly unavailable until M5)
+- End-to-end: `pnpm test:e2e` (fake EventSub/Builder, real QuickJS Gatekeeper; no paid AI or Twitch)
 - Clean regenerable SDK caches: `pnpm clean:runtime` (only after Builder stops; preserves auth, sessions and databases).
 - Real three-round live soak: `pnpm forge:soak` (paid API, real wall-clock Demo rounds, isolated SIM-only server).
+- Real 45-minute soak: `pnpm build`, then `node scripts/soak-45.mjs` (paid API and Codex, SIM only, test-only 30 builds/hour cap, automatic mid-season restart).
+- Runtime credential-pattern scan: `node scripts/scan-runtime-secrets.mjs` (never prints matching secrets; credential storage and active temporary dirs excluded).
 - Format: `pnpm format`
 - Feasibility: `pnpm smoke:codex` and `pnpm smoke:openai`
 - Real Forge dry run: `pnpm forge:dry-run 1` (or `2`); uses paid Producer API and the machine's Codex login, never Twitch. Saves source/report under `docs/media/sample-mods/`.

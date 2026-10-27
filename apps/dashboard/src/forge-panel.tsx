@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   forgeViewSchema,
+  formatCredits,
   type ForgeView,
   type ForgeRound,
 } from "../../../packages/shared/src/forge.js";
@@ -33,12 +34,7 @@ function Round({ round, now }: { round: ForgeRound; now: number }) {
             <small>
               {card.suggestion
                 ? "Forge suggestion"
-                : card.credits
-                    .map(
-                      (c) =>
-                        `${c.source === "simulator" ? "[SIM] " : ""}@${c.name}`,
-                    )
-                    .join(", ")}
+                : formatCredits(card.credits)}
             </small>
             <details>
               <summary>Acceptance & risk</summary>
@@ -232,21 +228,54 @@ export function ForgePanel({ base }: { base: string }) {
               ))}
             </ol>
           </details>
+          <h3>Mod retention</h3>
+          <p>
+            When enabled, the oldest live mod retires into the Hall after the
+            limit. Its credits remain.
+          </p>
+          <div className="row">
+            <label>
+              <input
+                type="checkbox"
+                checked={view.retirement?.enabled ?? false}
+                disabled={busy || !!building}
+                onChange={(event) =>
+                  void action("retirement", {
+                    enabled: event.target.checked,
+                    limit: view.retirement?.limit ?? 12,
+                  })
+                }
+              />{" "}
+              Retire oldest mods automatically
+            </label>
+            <label>
+              Maximum live mods{" "}
+              <select
+                aria-label="Maximum live mods"
+                value={view.retirement?.limit ?? 12}
+                disabled={busy || !!building}
+                onChange={(event) =>
+                  void action("retirement", {
+                    enabled: view.retirement?.enabled ?? false,
+                    limit: Number(event.target.value),
+                  })
+                }
+              >
+                {[5, 8, 10, 12, 15, 20, 24].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <h3>Generated mods</h3>
           {view.mods.length ? (
             <ul className="forge-mods">
               {view.mods.map((mod) => (
                 <li key={mod.id}>
                   <span>
-                    {mod.title}{" "}
-                    <small>
-                      {mod.credits
-                        .map(
-                          (c) =>
-                            `${c.source === "simulator" ? "[SIM] " : ""}@${c.name}`,
-                        )
-                        .join(", ") || "Forge suggestion"}
-                    </small>
+                    {mod.title} <small>{formatCredits(mod.credits)}</small>
                   </span>
                   <button
                     disabled={busy}

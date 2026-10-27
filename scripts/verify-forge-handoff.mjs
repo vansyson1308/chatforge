@@ -1,15 +1,19 @@
-/* global document */
+/* global document, window */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdtemp, mkdir, rm, readFile } from "node:fs/promises";
+
 import { resolve, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright-core";
 import { get } from "node:http";
 
 // Isolated data: never reads the user's Twitch token or sends chat/AI requests.
-const data = await mkdtemp(join(tmpdir(), "chatforge-browser-"));
+const testTempRoot = resolve("runtime/tmp");
+await mkdir(testTempRoot, { recursive: true });
+process.env.TEMP = testTempRoot;
+process.env.TMP = testTempRoot;
+const data = await mkdtemp(join(testTempRoot, "chatforge-browser-"));
 const port = 3097,
   base = `http://localhost:${port}`;
 const server = spawn(process.execPath, ["dist/apps/server/src/main.js"], {
@@ -59,6 +63,12 @@ try {
     );
   assert.equal(await status("/dashboard/"), 200);
   assert.equal(await status("/overlay/"), 200);
+  const assetResponse = await fetch(`${base}/overlay/`);
+  assert.match(
+    assetResponse.headers.get("content-security-policy") ?? "",
+    /object-src 'none'/,
+  );
+  assert.equal(assetResponse.headers.get("x-content-type-options"), "nosniff");
   assert.equal(await status("/api/forge"), 403);
   assert.equal(
     (
@@ -102,14 +112,37 @@ try {
   const patch = await fetch(`${base}/forge/patch-notes`);
   assert.equal(patch.status, 200);
   assert.match(await patch.text(), /# ChatForge/);
+  assert.equal((await (await fetch(`${base}/api/readiness`)).json()).overlay, false);
   const overlay = await browser.newPage({
     viewport: { width: 1200, height: 675 },
+  });
+  await overlay.addInitScript(() => {
+    const NativeSocket = window.WebSocket;
+    class ObservedSocket extends NativeSocket {
+      constructor(...args) {
+        super(...args);
+        window.__chatforgeSocket = this;
+      }
+    }
+    window.WebSocket = ObservedSocket;
   });
   overlay.on("pageerror", (error) => errors.push(error.message));
   await overlay.goto(`${base}/overlay/`);
   await overlay.waitForFunction(
     () => Number(document.querySelector("canvas")?.dataset.tick) > 10,
   );
+  assert.equal((await (await fetch(`${base}/api/readiness`)).json()).overlay, true);
+  const tickBeforeDisconnect = await overlay.evaluate(() =>
+    Number(document.querySelector("canvas")?.dataset.tick),
+  );
+  await overlay.evaluate(() => window.__chatforgeSocket.close());
+  await overlay.waitForFunction(
+    (tick) =>
+      Number(document.querySelector("canvas")?.dataset.tick) > tick + 15,
+    tickBeforeDisconnect,
+    { timeout: 15000 },
+  );
+  assert.equal((await (await fetch(`${base}/api/readiness`)).json()).overlay, true);
   // Preview saved real cards without triggering another paid round or changing the DB.
   const samples = await Promise.all(
     ["forge-1-6", "forge-1-8"].map(async (id) =>

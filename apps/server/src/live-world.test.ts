@@ -7,6 +7,7 @@ import {
 } from "../../../packages/engine/src/invariants.js";
 import { ModHost } from "./mod-host.js";
 import { gatekeeper } from "./gatekeeper.js";
+import { goodMod } from "./forge-fixtures.js";
 const source = (name: string) =>
   readFile(new URL(`../examples/${name}.js`, import.meta.url), "utf8");
 it("culls escaped legacy projectiles and reports exact baseline faults without blaming a candidate", async () => {
@@ -94,6 +95,26 @@ it("rejects particles-only output at the spectacle gate", async () => {
   expect(report.ok).toBe(false);
   expect(report.checks.at(-1)!.detail).toContain("Too subtle");
 });
+it("requires canonical simulated attribution in generated banners", async () => {
+  const input = {
+    modId: "credited",
+    checkpoint: new World().snapshot(),
+    commands: ["!spark"],
+    spectacle: true,
+    credits: [{ id: "s1", name: "Ada", source: "simulator" as const }],
+  };
+  const wrong = await gatekeeper({
+    ...input,
+    source: goodMod.replace("forged by the community", "@Ada"),
+  });
+  expect(wrong.ok).toBe(false);
+  expect(wrong.checks.at(-1)?.detail).toContain("Credit banner missing");
+  const right = await gatekeeper({
+    ...input,
+    source: goodMod.replace("forged by the community", "@Ada (SIM)"),
+  });
+  expect(right.ok, JSON.stringify(right)).toBe(true);
+}, 30000);
 it("marches waves along the ground, damages/rebuilds the keep and presents a fifth-wave boss", () => {
   const world = new World(77);
   world.state.wave = 4;

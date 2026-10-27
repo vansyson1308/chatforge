@@ -43,6 +43,7 @@ export interface Entity {
   weapon?: string;
   gold: number;
   bornTick?: number;
+  lastSiegeTick?: number;
   scale?: number;
   hat?: string;
 }
@@ -180,7 +181,8 @@ export class World {
   private nearest(entity: Entity): Entity | undefined {
     let best: Entity | undefined;
     let bestDistance = Infinity;
-    const limit = entity.behavior === "guard" ? 220 : 1800;
+    const limit =
+      entity.team === "enemy" ? 90 : entity.behavior === "guard" ? 450 : 1200;
     for (let radius = 80; radius < limit * 2; radius *= 2) {
       this.nearby(entity.x, entity.y, Math.min(limit, radius), (candidate) => {
         if (
@@ -343,7 +345,7 @@ export class World {
       Math.floor(
         this.state.rules.waveSize +
           (this.state.wave - 1) * 2 +
-          this.state.entities.filter((e) => e.team === "hero").length * 1.2,
+          this.state.entities.filter((e) => e.team === "hero").length * 1.8,
       ),
     );
     this.state.spawnCountdown = -2;
@@ -412,23 +414,32 @@ export class World {
         team: "enemy",
         x: this.random() < 0.5 ? 0 : 1200,
         y: 470 + this.random() * 100,
-        hp: (30 + state.wave * 5 + heroes * 2) * (boss ? 6 : 1),
-        speed: (boss ? 0.8 : 1.1) * state.rules.enemySpeedMultiplier,
-        damage: boss ? 12 : 4,
+        hp:
+          (36 +
+            state.wave * 5 +
+            heroes * 3 +
+            Object.keys(state.mods).length * 2) *
+          (boss ? 5 : 1),
+        speed: (boss ? 1.5 : 2.2) * state.rules.enemySpeedMultiplier,
+        damage: boss ? 16 : 6,
         scale: boss ? 2.5 : 1,
         range: 18,
       });
       state.pendingEnemies--;
       state.spawnCountdown = Math.floor(state.rules.spawnIntervalTicks);
     }
-    const entities = [...state.entities];
+    const entities = state.entities;
+    const initialCount = entities.length;
     this.reindex();
     const modCounts = new Map<string, number>();
-    for (const entity of entities)
+    for (let i=0;i<initialCount;i++) {
+      const entity=entities[i]!;
       for (const tag of entity.tags)
         if (tag.startsWith("mod:"))
           modCounts.set(tag, (modCounts.get(tag) ?? 0) + 1);
-    for (const entity of entities) {
+    }
+    for (let index=0;index<initialCount;index++) {
+      const entity=entities[index]!;
       if (entity.hp <= 0) continue;
       if (entity.team === "prop") {
         if (entity.lifetime !== undefined && --entity.lifetime <= 0)
@@ -479,6 +490,30 @@ export class World {
         entity.tags.some((t) => t.startsWith("mod:"))
       )
         continue;
+      // A minority of seed raiders lob visible siege shots while approaching or fighting.
+      // This lets the keep take pressure without forcing every melee enemy through heroes.
+      if (
+        entity.team === "enemy" &&
+        (entity.kind === "slime" || entity.kind === "slime-king") &&
+        entity.id % 2 === 0 &&
+        distance2(entity, KEEP) < 500 ** 2 &&
+        state.tick - (entity.lastSiegeTick ?? entity.bornTick ?? 0) >=
+          (entity.lastSiegeTick === undefined ? 60 : 180)
+      ) {
+        entity.lastSiegeTick = state.tick;
+        const amount = entity.kind === "slime-king" ? 2 : 0.5;
+        state.keepHp -= amount;
+        state.events.push({ type: "keep_damaged", amount, hp: state.keepHp });
+        state.fx.push({
+          type: "beam",
+          x: entity.x,
+          y: entity.y - 10,
+          x2: KEEP.x,
+          y2: KEEP.y - 40,
+          color: "#ffa65c",
+          ticks: 9,
+        });
+      }
       if (entity.cooldown > 0) entity.cooldown--;
       let target = this.nearest(entity);
       // Siege units keep marching; chasing a remote hero must not stall the wave.
@@ -492,8 +527,11 @@ export class World {
         entity.team === "hero" &&
         entity.behavior === "guard" &&
         target &&
-        distance2(entity, target) > 220 ** 2
+        distance2(entity, target) > 450 ** 2
       )
+        target = undefined;
+      // Siege units at the wall focus the keep instead of standing idle against nearby defenders.
+      if (entity.team === "enemy" && distance2(entity, KEEP) < 64 ** 2)
         target = undefined;
       let destination: { x: number; y: number } = target ?? KEEP;
       if (!target && entity.team === "hero" && entity.behavior === "guard") {
@@ -520,7 +558,7 @@ export class World {
         };
       const dx = destination.x - entity.x;
       const dy = destination.y - entity.y;
-      const distance = Math.hypot(dx, dy) || 1;
+      const distance = Math.sqrt(dx*dx+dy*dy) || 1;
       const weapon = entity.weapon ? state.weapons[entity.weapon] : undefined;
       const range = weapon?.range ?? entity.range;
       const targetDistance = target
@@ -587,7 +625,7 @@ export class World {
           if (other.id === entity.id || other.team !== "hero") return;
           const sx = entity.x - other.x,
             sy = entity.y - other.y;
-          const d = Math.hypot(sx, sy);
+          const d = Math.sqrt(sx*sx+sy*sy);
           const force = ((36 - d) / 36) * 0.65;
           entity.vx +=
             (d > 0.01 ? sx / d : entity.id < other.id ? -1 : 1) * force;
@@ -603,18 +641,21 @@ export class World {
         distance2(entity, KEEP) < 24 ** 2 &&
         entity.cooldown === 0
       ) {
-        state.keepHp -= entity.damage;
+        const siegeDamage = Math.max(1, Math.ceil(entity.damage * 0.15));
+        state.keepHp -= siegeDamage;
         entity.cooldown = 30;
         state.events.push({
           type: "keep_damaged",
-          amount: entity.damage,
+          amount: siegeDamage,
           hp: state.keepHp,
         });
       }
     }
-    state.entities = state.entities.filter((e) => e.hp > 0);
-    for (const [id, entity] of this.byId)
-      if (entity.hp <= 0) this.byId.delete(id);
+    if(state.entities.some(e=>e.hp<=0)) {
+      state.entities = state.entities.filter((e) => e.hp > 0);
+      for (const [id, entity] of this.byId)
+        if (entity.hp <= 0) this.byId.delete(id);
+    }
     if (state.keepHp <= 0) {
       state.keepHp = 100;
       state.wave = 0;

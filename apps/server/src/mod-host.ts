@@ -322,6 +322,24 @@ export class ModHost {
         y: finite(args[2], -200, 875),
         ...definition.spec,
       };
+      if (options.team === "prop") {
+        // The nearest reserved slot keeps large persistent decorations away from combat.
+        const slots = [
+          { x: 240, y: 430 },
+          { x: 960, y: 430 },
+          { x: 480, y: 245 },
+          { x: 720, y: 245 },
+          { x: 600, y: 125 },
+        ];
+        const slot = slots.reduce((best, current) =>
+          (current.x - options.x) ** 2 + (current.y - options.y) ** 2 <
+          (best.x - options.x) ** 2 + (best.y - options.y) ** 2
+            ? current
+            : best,
+        );
+        options.x = slot.x;
+        options.y = slot.y;
+      }
       const entity = {
         id: tx.nextId++,
         kind: name,
@@ -526,7 +544,7 @@ export class ModHost {
     if (
       !identifier.test(id) ||
       source.length > 100000 ||
-      (!this.mods.has(id) && this.mods.size >= 16)
+      (!this.mods.has(id) && this.mods.size >= 32)
     )
       throw Error("Invalid mod or mod budget exceeded");
     const before = this.checkpoint();
@@ -597,6 +615,36 @@ export class ModHost {
     );
     this.world.reindex();
     this.world.state.modSetVersion++;
+  }
+  /** Retire one generated mod without letting later rollback snapshots resurrect it. */
+  retire(id: string): void {
+    if (!this.mods.has(id)) throw Error("Unknown active mod");
+    const owned = new Set(
+      [...this.definitionOwners]
+        .filter(([, owner]) => owner === id)
+        .map(([name]) => name),
+    );
+    const scrub = (world: WorldState): void => {
+      delete world.mods[id];
+      for (const name of owned) {
+        delete world.weapons[name];
+        delete world.projectiles[name];
+      }
+      world.entities = world.entities.filter(
+        (e) => !e.tags.includes(`mod:${id}`),
+      );
+      for (const entity of world.entities) {
+        if (entity.weapon && owned.has(entity.weapon)) delete entity.weapon;
+        if (entity.hat && owned.has(entity.hat)) delete entity.hat;
+      }
+    };
+    this.unload(id);
+    scrub(this.world.state);
+    scrub(this.safeBaseline);
+    this.deployments = this.deployments.filter((entry) => entry.id !== id);
+    for (const entry of this.deployments) scrub(entry.before);
+    this.world.reindex();
+    this.lastGood = this.checkpoint();
   }
   private fail(id: string, error: unknown): void {
     this.tx = undefined;

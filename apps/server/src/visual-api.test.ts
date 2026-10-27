@@ -34,8 +34,8 @@ it("runs hats, inert props and all v1.1 visual operations only through QuickJS",
     ).toBe(true);
     for (let i = 0; i < 100; i++) host.tick();
     expect(host.world.byId.get(prop.id)).toMatchObject({
-      x: 400,
-      y: 400,
+      x: 240,
+      y: 430,
       hp: 1,
     });
     expect(host.diagnostics).toEqual([]);

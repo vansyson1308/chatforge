@@ -3,6 +3,7 @@ import type {
   ForgeRound,
   ForgeCard,
 } from "../../../packages/shared/src/forge.js";
+import { formatCredits } from "../../../packages/shared/src/forge.js";
 import type { HostCheckpoint } from "./mod-host.js";
 
 export class ForgeStore {
@@ -178,12 +179,53 @@ export class ForgeStore {
           credit.source,
         );
   }
+  commitLive(
+    round: ForgeRound,
+    source: string,
+    checkpoint: HostCheckpoint,
+    now: number,
+    buildId: number,
+  ): void {
+    const previous = round.stage;
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.deploy(round, source, now);
+      this.checkpoint(checkpoint);
+      round.stage = "LIVE";
+      round.deadline = null;
+      this.save(round, now);
+      this.saveBuild(buildId, round);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      round.stage = previous;
+      throw error;
+    }
+  }
   reconcile(ids: string[]): void {
     for (const mod of this.mods())
       if (!ids.includes(mod.id))
         this.db
           .prepare("UPDATE mod_versions SET active=0 WHERE id=?")
           .run(mod.id);
+  }
+  retire(id: string): void {
+    this.db
+      .prepare(
+        "UPDATE mod_versions SET active=2 WHERE season=? AND id=? AND active=1",
+      )
+      .run(this.season, id);
+  }
+  retireAndCheckpoint(id: string, checkpoint: HostCheckpoint): void {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.retire(id);
+      this.checkpoint(checkpoint);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
   mods(
     includeHistory = false,
@@ -217,7 +259,7 @@ export class ForgeStore {
       .all(this.season)
       .map((row) => {
         const card = JSON.parse(String(row.card)) as ForgeCard;
-        return `## ${escape(card.title)} (${row.active ? "live" : "rolled back"})\n\n${escape(card.pitch)}\n\n${card.credits.length ? "Thanks " + card.credits.map((c) => `${c.source === "simulator" ? "[SIM] " : ""}@${escape(c.name)}`).join(", ") : "Forge suggestion"}. Commands: ${card.commands.map(escape).join(", ") || "automatic"}.\n`;
+        return `## ${escape(card.title)} (${row.active === 1 ? "live" : row.active === 2 ? "retired" : "rolled back"})\n\n${escape(card.pitch)}\n\n${card.credits.length ? "Thanks " + formatCredits(card.credits.map((c) => ({ ...c, name: escape(c.name) }))) : "Forge suggestion"}. Commands: ${card.commands.map(escape).join(", ") || "automatic"}.\n`;
       });
     return `# ChatForge - session ${this.season}\n\n${entries.join("\n") || "No mods shipped yet.\n"}`;
   }

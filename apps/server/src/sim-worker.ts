@@ -13,6 +13,7 @@ const world = new World(2026);
 const host = new ModHost(world);
 let pending = Promise.resolve();
 let busy = false;
+const performanceBins = new Uint32Array(1001);
 const send = () => {
   const fx = world.drainFx();
   for (const diagnostic of host.drainDiagnostics()) {
@@ -55,7 +56,20 @@ const send = () => {
 };
 const timer = setInterval(() => {
   if (busy) return;
+  const started = performance.now();
   host.tick();
+  if (process.env.CHATFORGE_METRICS === "1") {
+    performanceBins[
+      Math.min(1000, Math.floor((performance.now() - started) * 10))
+    ]!++;
+    if (world.state.tick % 300 === 0) {
+      port.postMessage({
+        type: "performance",
+        bins: Array.from(performanceBins),
+      });
+      performanceBins.fill(0);
+    }
+  }
   if (world.state.tick % 300 === 0)
     port.postMessage({
       type: "checkpoint",
@@ -103,6 +117,10 @@ port.on(
             host.rollback(
               typeof message.modId === "string" ? message.modId : undefined,
             );
+            result = host.exportCheckpoint();
+            break;
+          case "retire":
+            host.retire(String(message.modId));
             result = host.exportCheckpoint();
             break;
           case "safe-mode":

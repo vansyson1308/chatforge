@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+const testTempRoot = resolve(process.cwd(), "runtime/tmp");
+mkdirSync(testTempRoot, { recursive: true });
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { ChatRouter, IdeaInbox, hasLink, sanitize } from "./chat-router.js";
 import { CrowdSim, ideas, badIdeas, personas } from "./crowd-sim.js";
 import { ChatOut } from "./chat-out.js";
@@ -104,7 +106,7 @@ describe("chat input boundary", () => {
     }
   });
   it("persists inbox with source and stable identity", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "chatforge-inbox-"));
+    const dir = await mkdtemp(join(testTempRoot, "chatforge-inbox-"));
     try {
       const file = join(dir, "ideas.sqlite");
       const a = new IdeaInbox(file);

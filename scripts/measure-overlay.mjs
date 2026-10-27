@@ -1,11 +1,15 @@
 import { chromium } from "playwright-core";
 /* global document, requestAnimationFrame */
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdtemp, mkdir, rm } from "node:fs/promises";
+
 import { resolve, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-const data = await mkdtemp(join(tmpdir(), "chatforge-fps-")),
+const testTempRoot = resolve("runtime/tmp");
+await mkdir(testTempRoot, { recursive: true });
+process.env.TEMP = testTempRoot;
+process.env.TMP = testTempRoot;
+const data = await mkdtemp(join(testTempRoot, "chatforge-fps-")),
   base = "http://localhost:3099";
 const server = spawn(process.execPath, ["dist/apps/server/src/main.js"], {
   cwd: resolve("apps/server"),

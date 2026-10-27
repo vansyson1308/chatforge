@@ -1,12 +1,16 @@
 /* global document */
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+
 import { resolve, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { DatabaseSync } from "node:sqlite";
 import { chromium } from "playwright-core";
-const data = await mkdtemp(join(tmpdir(), "chatforge-soak-"));
+const testTempRoot = resolve("runtime/tmp");
+await mkdir(testTempRoot, { recursive: true });
+process.env.TEMP = testTempRoot;
+process.env.TMP = testTempRoot;
+const data = await mkdtemp(join(testTempRoot, "chatforge-soak-"));
 const base = "http://localhost:3098",
   directory = resolve("docs/media/hud");
 await mkdir(directory, { recursive: true });

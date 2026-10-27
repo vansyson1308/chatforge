@@ -1,5 +1,13 @@
 # Architecture
 
+## M4 finish and M5 hardening
+
+The architecture remains server-authoritative. HUD content has named, opaque slots and is derived from the current Forge state; the same credit formatter is used for chat, dashboard and overlay. Generated emblems represent shipped patch IDs on the keep; added towers, lanterns and flags show progress at three-patch intervals. Ground enemies attack the keep, and persistent mod props are clamped to left flank, right flank, ramparts or sky decor anchors.
+
+The streamer may enable oldest-first active-mod retirement and choose the limit. The SQLite retirement record and worker checkpoint are committed together; history and credits remain in the Hall. Removing a mod cannot reverse its previously applied world-rule changes without replaying subsequent mods, so those changes remain. The server exposes a local Go-Live readiness view and an opt-in OpenAI check; a present Codex login file is reported as presence, not remote authentication success.
+
+CI runs the fake-EventSub-to-real-QuickJS end-to-end flow and an isolated 15-mod benchmark in addition to unit and security checks. The longer paid soak uses its own SIM-only database and reports real Producer and Codex outcomes, including a mid-season restart.
+
 ## M3 delivered Forge loop
 
 M2 passed a real Twitch live test on `vansyson1308`, including all seven subscriptions and chat delivery. M3 preserves the seven-package architecture. See [FORGE_LOOP.md](FORGE_LOOP.md) for controls, persistence and real dry-run evidence.

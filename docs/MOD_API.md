@@ -208,3 +208,7 @@ See `apps/server/examples/` for tested meteor impacts, third-wave splitting Slim
 CPU accounting uses Node 24's [process.threadCpuUsage](https://nodejs.org/docs/latest-v24.x/api/process.html#processthreadcpuusagepreviousvalue), excluding OS descheduling. A secondary wall deadline (at least 250 ms) also bounds each evaluation. Windows CPU timer granularity can overshoot a CPU limit by one OS accounting quantum. Performance gates independently measure real elapsed tick time.
 
 Deployment rollback retains the latest 32 in-memory deployment checkpoints. If no matching history exists (for example, a fresh host restored only from a persistence snapshot), failure restores the host's initial safe baseline, disabling the unknown set. Persisting deployment history across process restarts belongs to M3; JSON world/timer continuation is already supported. Explicit last-good rollback uses the latest periodic checkpoint.
+
+## Decor placement and group effects
+
+Props are snapped by the host to the nearest reserved slot: left flank (240,430), right flank (960,430), left or right rampart (480/720,245), or sky (600,125). Their resulting spawn handle reports the snapped position. Avoid placing major props in the battlefield. Prefer effects covering all heroes or a visibly substantial group, within existing budgets.

@@ -212,3 +212,20 @@ td {
     padding: 16px;
   }
 }
+
+.readiness {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.7rem;
+  padding: 0;
+  list-style: none;
+}
+.light.ready {
+  color: #59c887;
+}
+.light.not-ready {
+  color: #ff7869;
+}
+.light.unknown {
+  color: #f2bf6b;
+}

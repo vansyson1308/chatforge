@@ -1,7 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
+const testTempRoot = resolve(process.cwd(), "runtime/tmp");
+mkdirSync(testTempRoot, { recursive: true });
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { World } from "../../../packages/engine/src/index.js";
 import type { ForgeView } from "../../../packages/shared/src/forge.js";
 import { ForgeLoop } from "./forge-loop.js";
@@ -10,6 +12,7 @@ import { ModHost } from "./mod-host.js";
 import { CrowdSim } from "./crowd-sim.js";
 import { gatekeeper } from "./gatekeeper.js";
 import type { Builder } from "./builder.js";
+import type { Producer } from "./producer.js";
 import { testCards } from "./forge-fixtures.js";
 import { goodMod } from "./forge-fixtures.js";
 
@@ -53,6 +56,7 @@ it("preserves CLI/host snapshot parity even while the live world advances during
       source: goodMod,
       checkpoint: input!.checkpoint,
       commands: input!.card.commands,
+      credits: input!.card.credits,
       spectacle: true,
     });
     expect(f.loop.build?.report?.hashes).toEqual(local.hashes);
@@ -62,7 +66,7 @@ it("preserves CLI/host snapshot parity even while the live world advances during
   }
 });
 it("reopens durable season/checkpoint/thread and stops interrupted builds", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "chatforge-restart-")),
+  const directory = await mkdtemp(join(testTempRoot, "chatforge-restart-")),
     file = join(directory, "state.sqlite");
   const first = await fixture(undefined, file);
   let hash = "";
@@ -164,6 +168,7 @@ async function fixture(
   builder: Builder = { build: async () => ({ source: goodMod, tokens: 0 }) },
   file = ":memory:",
   onCelebrate: () => Promise<void> = async () => {},
+  producer?: Producer,
 ) {
   const inbox = new IdeaInbox(file),
     host = new ModHost(new World(2026));
@@ -182,7 +187,7 @@ async function fixture(
     command: () => {},
   });
   const loop = new ForgeLoop(inbox, {
-    producer: {
+    producer: producer ?? {
       curate: async () => ({
         cards: structuredClone(testCards),
         rejected: [],
@@ -200,6 +205,13 @@ async function fixture(
       safeMode: async () => {
         host.safeMode();
         return host.exportCheckpoint();
+      },
+      retire: async (id) => {
+        host.retire(id);
+        return host.exportCheckpoint();
+      },
+      restore: async (checkpoint) => {
+        host.importCheckpoint(checkpoint);
       },
       celebrate: async (text) => {
         announcements.push(text);
@@ -232,6 +244,53 @@ async function fixture(
     },
   };
 }
+it.each(["HTTP 500", "TimeoutError"])(
+  "keeps the world and emits a safe message when Producer fails: %s",
+  async (kind) => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    const f = await fixture(undefined, undefined, undefined, {
+      curate: async () => {
+        const error = new Error("sensitive provider payload");
+        error.name = kind;
+        throw error;
+      },
+    });
+    try {
+      const before = f.host.world.hash();
+      f.loop.start("demo");
+      await vi.advanceTimersByTimeAsync(45000);
+      await f.loop.settled();
+      expect(f.loop.round?.stage).toBe("FAILED");
+      expect(f.host.world.hash()).toBe(before);
+      expect(f.loop.notice).toContain("Producer unavailable");
+      expect(JSON.stringify(f.frames)).not.toContain(
+        "sensitive provider payload",
+      );
+    } finally {
+      await f.cleanup();
+    }
+  },
+);
+it("keeps the last good world if Codex exits during a build", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  const f = await fixture({
+    build: async () => {
+      throw Error("Codex process exited");
+    },
+  });
+  try {
+    const before = f.host.world.hash();
+    await voting(f.loop);
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    expect(f.loop.build?.stage).toBe("FAILED");
+    expect(f.loop.notice).toContain("Build failed");
+    expect(f.host.world.hash()).toBe(before);
+    expect(f.host.world.state.mods).not.toHaveProperty("forge-1-1");
+  } finally {
+    await f.cleanup();
+  }
+});
 async function voting(loop: ForgeLoop) {
   loop.start("demo");
   await vi.advanceTimersByTimeAsync(45000);
@@ -391,6 +450,68 @@ it("keeps each consecutive ship moment LIVE while celebration awaits worker ackn
     expect(f.loop.build?.stage).toBe("LIVE");
     await vi.advanceTimersByTimeAsync(1000);
     expect(f.loop.build?.stage).toBe("IDLE");
+  } finally {
+    await f.cleanup();
+  }
+});
+it("retires the oldest mod into credited history and does not resurrect it on rollback", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  let n = 0;
+  const f = await fixture({
+    build: async () => ({
+      source: goodMod.replaceAll("armageddon-duck", `duck-${++n}`),
+      tokens: 0,
+    }),
+  });
+  try {
+    await f.loop.setRetirement(true, 1);
+    await voting(f.loop);
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    await vi.advanceTimersByTimeAsync(45000);
+    await f.loop.settled();
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    expect(f.loop.build?.stage).toBe("LIVE");
+    expect(f.loop.store.mods()).toHaveLength(1);
+    expect(f.loop.store.mods(true)).toHaveLength(2);
+    expect(f.loop.store.patchNotes()).toContain("retired");
+    expect(f.host.world.state.mods["forge-1-1"]).toBeUndefined();
+    await f.loop.rollback("forge-1-2");
+    expect(f.host.world.state.mods["forge-1-1"]).toBeUndefined();
+    expect(f.loop.store.mods(true)).toHaveLength(2);
+  } finally {
+    await f.cleanup();
+  }
+});
+it("keeps both live mods if retirement cannot be saved atomically", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  let n = 0;
+  const f = await fixture({
+    build: async () => ({
+      source: goodMod.replaceAll("armageddon-duck", `duck-${++n}`),
+      tokens: 0,
+    }),
+  });
+  try {
+    await f.loop.setRetirement(true, 1);
+    await voting(f.loop);
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    vi.spyOn(f.loop.store, "retireAndCheckpoint").mockImplementationOnce(() => {
+      throw Error("database unavailable");
+    });
+    await vi.advanceTimersByTimeAsync(45000);
+    await f.loop.settled();
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    expect(f.loop.build?.stage).toBe("LIVE");
+    expect(f.loop.store.mods()).toHaveLength(2);
+    expect(f.host.world.state.mods["forge-1-1"]).toBeDefined();
+    expect(f.host.world.state.mods["forge-1-2"]).toBeDefined();
+    expect(
+      f.loop.activity.some((line) => line.includes("Retirement failed")),
+    ).toBe(true);
   } finally {
     await f.cleanup();
   }

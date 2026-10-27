@@ -15,13 +15,14 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:e2e": "node scripts/e2e-unavailable.mjs",
+    "test:e2e": "vitest run apps/server/src/stream.e2e.test.ts",
     "format": "prettier --write .",
     "smoke:codex": "pnpm --filter @chatforge/server smoke:codex",
     "smoke:openai": "pnpm --filter @chatforge/server smoke:openai",
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "test:fps": "node scripts/measure-overlay.mjs",
     "start": "pnpm --filter @chatforge/server dev",
+    "stream": "pnpm build && node scripts/stream.mjs",
     "forge:soak": "pnpm build && node scripts/soak-forge.mjs"
   },
   "devDependencies": {
@@ -32,6 +33,6 @@
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.12"
   }
 }

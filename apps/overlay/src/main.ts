@@ -8,6 +8,7 @@ import {
   type ForgeView,
 } from "../../../packages/shared/src/forge.js";
 import { drawForgeHud } from "./forge-hud.js";
+import { formatCredit } from "../../../packages/shared/src/forge.js";
 
 type Entity = {
   id: number;
@@ -80,7 +81,7 @@ document.body.append(sound);
 
 function connect(): void {
   const socket = new WebSocket(
-    `ws://${location.hostname}:${location.port === "5173" ? "3000" : location.port}`,
+    `ws://${location.hostname}:${location.port === "5173" ? "3000" : location.port}/?client=overlay`,
   );
   socket.onopen = () => {
     connected = true;
@@ -376,6 +377,16 @@ function keep(time: number): void {
   ctx.beginPath();
   ctx.ellipse(600, 438, 144, 28, 0, 0, Math.PI * 2);
   ctx.fill();
+  const patchCount = (forge?.patches ?? forge?.mods ?? []).length;
+  for (let i = 0; i < Math.min(3, Math.floor(patchCount / 3)); i++) {
+    const x = i === 0 ? 430 : i === 1 ? 724 : 465;
+    ctx.fillStyle = "#33424c";
+    ctx.fillRect(x, 245 - i * 18, 46, 179 + i * 18);
+    ctx.fillStyle = "#70818b";
+    ctx.fillRect(x - 5, 236 - i * 18, 56, 14);
+    ctx.fillStyle = "#ffb44a";
+    ctx.fillRect(x + 16, 280 - i * 18, 12, 18);
+  }
   ctx.fillStyle = "#45515a";
   ctx.fillRect(500, 270, 200, 154);
   ctx.fillStyle = "#59636a";
@@ -403,14 +414,27 @@ function keep(time: number): void {
   ctx.fillStyle = "#ffd27d";
   ctx.fillRect(602, 197, 21, 5);
   for (const [i, mod] of (forge?.patches ?? forge?.mods ?? []).entries()) {
-    const x = 487 + (i % 10) * 24,
-      y = 276 + Math.floor(i / 10) * 38;
-    ctx.fillStyle = ["#ffbd62", "#9fe6bc", "#b5b8fa"][i % 3]!;
-    ctx.fillRect(x, y, 16, 27);
-    ctx.fillStyle = "#253342";
-    ctx.font = "bold 12px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(mod.title.slice(0, 1), x + 8, y + 18);
+    // Stable generated emblems make every historical patch visible, including retired ones.
+    const x = 510 + (i % 5) * 36,
+      y = 278 + Math.floor(i / 5) * 38;
+    if (y > 398) break;
+    let hash = 2166136261;
+    for (const c of mod.id) {
+      hash ^= c.charCodeAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    hash >>>= 0;
+    ctx.fillStyle = ["#ffbd62", "#9fe6bc", "#b5b8fa", "#ef9d93", "#e5d987"][
+      hash % 5
+    ]!;
+    ctx.fillRect(x, y, 30, 30);
+    ctx.fillStyle = "#263342";
+    for (let row = 0; row < 5; row++)
+      for (let col = 0; col < 3; col++)
+        if ((hash >>> ((row * 3 + col) % 30)) & 1) {
+          ctx.fillRect(x + 3 + col * 4, y + 5 + row * 4, 4, 4);
+          ctx.fillRect(x + 23 - col * 4, y + 5 + row * 4, 4, 4);
+        }
   }
   for (const x of [502, 698]) {
     const radius = 48 + Math.sin(time / 140 + x) * 4;
@@ -491,7 +515,10 @@ function render(time: number): void {
       ctx.fillText("SIM", x, y + 12);
     }
     if (entity.viewer) {
-      const viewerLabel = `${entity.simulated ? "SIM · " : ""}${entity.viewer}`;
+      const viewerLabel = formatCredit({
+        name: entity.viewer,
+        source: entity.simulated ? "simulator" : "twitch",
+      });
       let width = labelWidths.get(viewerLabel);
       if (width === undefined) {
         ctx.font = labelFont;
@@ -744,7 +771,14 @@ function render(time: number): void {
     74,
   );
   ctx.fillStyle = connected ? "#8fd3a4" : "#e88a75";
-  ctx.fillText(connected ? "● LIVE SIMULATION" : "● CONNECTING", 38, 98);
+  ctx.fillText(
+    connected
+      ? `● LIVE · SEASON ${forge?.season ?? 1} · ROUND ${forge?.round?.id ?? forge?.build?.id ?? 0}`
+      : "● CONNECTING",
+    38,
+    98,
+    217,
+  );
   ctx.textAlign = "right";
   ctx.font = "12px monospace";
   ctx.fillStyle = "#e8d7b1";

@@ -4,6 +4,7 @@ import type {
   ForgeView,
   GateReport,
 } from "../../../packages/shared/src/forge.js";
+import { formatCredits } from "../../../packages/shared/src/forge.js";
 import type { Chat } from "../../../packages/shared/src/chat.js";
 import type { HostCheckpoint } from "./mod-host.js";
 import type { GateInput } from "./gatekeeper.js";
@@ -19,6 +20,8 @@ export interface ForgeSimulation {
   rollback(id?: string): Promise<HostCheckpoint>;
   safeMode(): Promise<HostCheckpoint>;
   celebrate(text: string): Promise<void>;
+  retire?(id: string): Promise<HostCheckpoint>;
+  restore?(checkpoint: HostCheckpoint): Promise<void>;
 }
 export interface ForgeOptions {
   producer: Producer;
@@ -36,6 +39,7 @@ export interface ForgeOptions {
   buildTimeoutMs?: number;
   buildCap?: number;
   diagnostic?(error: unknown): void;
+  connection?(): { twitchEnabled: boolean; eventsub: string };
   autoCollect?: boolean;
 }
 const presets = {
@@ -110,6 +114,7 @@ export class ForgeLoop {
     return {
       type: "forge",
       running: this.running,
+      connection: this.options.connection?.(),
       preset: this.preset,
       season: this.store.season,
       round: this.round,
@@ -131,12 +136,55 @@ export class ForgeLoop {
       notice: this.notice,
       mods: this.store.mods(),
       patches: this.store.mods(true),
+      retirement: this.retirement(),
       usage: {
         ...this.store.usage(this.now()),
         cap: this.options.buildCap ?? 12,
       },
       now: this.now(),
     };
+  }
+  retirement(): { enabled: boolean; limit: number } {
+    return {
+      enabled: this.inbox.setting("retire-enabled") === "true",
+      limit: Math.max(
+        1,
+        Math.min(24, Number(this.inbox.setting("retire-limit")) || 12),
+      ),
+    };
+  }
+  async setRetirement(enabled: boolean, limit: number): Promise<void> {
+    if (this.building)
+      throw Error("Wait for the current build before changing retirement");
+    if (!Number.isInteger(limit) || limit < 1 || limit > 24)
+      throw Error("Retirement limit must be 1..24");
+    if (enabled && !this.options.simulation.retire)
+      throw Error("Retirement is unavailable");
+    if (enabled && !this.options.simulation.restore)
+      throw Error("Retirement recovery is unavailable");
+    this.inbox.setSetting("retire-enabled", String(enabled));
+    this.inbox.setSetting("retire-limit", String(limit));
+    await this.enforceRetirement();
+    this.publish();
+  }
+  private async enforceRetirement(): Promise<void> {
+    const { enabled, limit } = this.retirement();
+    if (!enabled) return;
+    while (this.store.mods().length > limit) {
+      const oldest = this.store.mods()[0]!;
+      const before = await this.options.simulation.checkpoint();
+      const checkpoint = await this.options.simulation.retire!(oldest.id);
+      try {
+        this.store.retireAndCheckpoint(oldest.id, checkpoint);
+      } catch (error) {
+        await this.options.simulation.restore!(before);
+        throw error;
+      }
+      this.options.announce(
+        `Retired ${oldest.title}; its credits remain in the Hall of Patches.`,
+      );
+      this.line(`Retired ${oldest.title}; the patch remains in history`);
+    }
   }
   publish(): void {
     this.options.broadcast(this.view());
@@ -161,6 +209,7 @@ export class ForgeLoop {
   start(preset: "demo" | "normal"): void {
     this.preset = preset;
     this.running = true;
+    this.inbox.setSetting("safe-mode", "false");
     if (this.build && ["FAILED", "ROLLED_BACK"].includes(this.build.stage))
       this.finishedAt = this.now();
     if (
@@ -280,7 +329,7 @@ export class ForgeLoop {
         "Voting open! !vote 1, !vote 2 or !vote 3. Your last vote counts.",
       );
     } catch (error) {
-      this.fail(round, error, "Curation failed");
+      this.fail(round, error, "Producer unavailable; check connection");
     } finally {
       this.curating = false;
     }
@@ -425,6 +474,7 @@ export class ForgeLoop {
             source,
             checkpoint: checkpoint.world,
             commands: card.commands,
+            credits: card.credits,
             spectacle: true,
           },
           signal,
@@ -451,14 +501,19 @@ export class ForgeLoop {
       signal.throwIfAborted();
       const live = await this.options.simulation.checkpoint();
       signal.throwIfAborted();
-      this.store.deploy(round, source, this.now());
-      this.store.checkpoint(live);
       this.finishedAt = this.now();
-      this.stage(round, "LIVE");
-      const credits =
-        card.credits
-          .map((c) => `${c.source === "simulator" ? "[SIM] " : ""}@${c.name}`)
-          .join(" ") || "Forge suggestion";
+      if (!transitions[round.stage].includes("LIVE"))
+        throw Error("Invalid deployment transition");
+      this.store.commitLive(round, source, live, this.now(), buildId);
+      this.publish();
+      try {
+        await this.enforceRetirement();
+      } catch {
+        this.line(
+          "Retirement failed; the live patch remains active. Check retention settings.",
+        );
+      }
+      const credits = formatCredits(card.credits);
       this.notice = `Shipped: ${card.title} - ${credits}`;
       await this.options.simulation
         .celebrate(this.notice)
@@ -497,6 +552,7 @@ export class ForgeLoop {
   async safeMode(): Promise<void> {
     this.stop();
     this.acceptCheckpoint(await this.options.simulation.safeMode(), true);
+    this.inbox.setSetting("safe-mode", "true");
     this.notice = "SAFE MODE: generated mods disabled";
     this.publish();
   }
@@ -504,7 +560,7 @@ export class ForgeLoop {
     this.store.checkpoint(checkpoint);
     this.store.reconcile(Object.keys(checkpoint.world.mods));
     if (rollback) {
-      if (this.build && ["LIVE", "IDLE"].includes(this.build.stage)) {
+      if (this.build && ["LIVE", "IDLE", "FAILED"].includes(this.build.stage)) {
         this.build.stage = "ROLLED_BACK";
         this.finishedAt = this.now();
         this.store.save(this.build, this.now());

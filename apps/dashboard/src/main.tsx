@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { z } from "zod";
 import { createRoot } from "react-dom/client";
 import {
   dashboardSchema,
@@ -11,8 +12,25 @@ const base =
   location.port === "5174"
     ? `http://${location.hostname}:3000`
     : location.origin;
+const readinessSchema = z.object({
+  twitch: z.boolean(),
+  eventsub: z.boolean(),
+  codexLoginFound: z.boolean(),
+  openAIHealth: z.enum([
+    "unverified",
+    "checking",
+    "healthy",
+    "invalid",
+    "unavailable",
+    "missing",
+  ]),
+  overlay: z.boolean(),
+  safeMode: z.boolean(),
+  simulationReady: z.boolean(),
+});
 function Dashboard() {
   const [state, setState] = useState<DashboardState>();
+  const [readiness, setReadiness] = useState<z.infer<typeof readinessSchema>>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -21,13 +39,18 @@ function Dashboard() {
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const response = await fetch(`${base}/api/status`, {
-          signal: controller.signal,
-        });
+        const [response, ready] = await Promise.all([
+          fetch(`${base}/api/status`, { signal: controller.signal }),
+          fetch(`${base}/api/readiness`, { signal: controller.signal }),
+        ]);
         if (!response.ok) throw Error("Server unavailable");
         const data = dashboardSchema.parse(await response.json());
+        const checks = ready.ok
+          ? readinessSchema.parse(await ready.json())
+          : undefined;
         if (!controller.signal.aborted) {
           setState(data);
+          if (checks) setReadiness(checks);
           setError("");
         }
       } catch {
@@ -81,6 +104,61 @@ function Dashboard() {
         </a>
       </header>
       <p role="status">{error || notice}</p>
+      <section aria-label="Go-Live checklist">
+        <h2>Go-Live checklist</h2>
+        <p>
+          Check the lights before opening your stream. Codex checks the local
+          login file; the API check verifies the key without revealing it.
+        </p>
+        <ul className="readiness">
+          {(
+            [
+              ["Twitch connected", readiness?.twitch],
+              ["Chat EventSub connected", readiness?.eventsub],
+              ["Codex login file present", readiness?.codexLoginFound],
+              [
+                "OpenAI API key verified",
+                readiness?.openAIHealth === "healthy"
+                  ? true
+                  : readiness?.openAIHealth === "unverified" ||
+                      readiness?.openAIHealth === "checking"
+                    ? undefined
+                    : false,
+              ],
+              ["Overlay connected", readiness?.overlay],
+              ["Safe Mode off", readiness ? !readiness.safeMode : undefined],
+              ["Simulation ready", readiness?.simulationReady],
+            ] as const
+          ).map(([label, ok]) => (
+            <li key={label}>
+              <span
+                aria-label={
+                  ok === undefined ? "unknown" : ok ? "ready" : "not ready"
+                }
+                className={
+                  ok === undefined
+                    ? "light unknown"
+                    : ok
+                      ? "light ready"
+                      : "light not-ready"
+                }
+              >
+                ●
+              </span>{" "}
+              {label}
+            </li>
+          ))}
+        </ul>
+        <button
+          disabled={busy || readiness?.openAIHealth === "checking"}
+          onClick={() => void post("/api/readiness/check-openai", {})}
+        >
+          Verify OpenAI key
+        </button>
+        {readiness?.openAIHealth === "unavailable" ? (
+          <p>OpenAI could not be reached; the key has not been verified.</p>
+        ) : null}
+      </section>
       <ForgePanel base={base} />
       {!state ? (
         <p>Connecting to local server…</p>

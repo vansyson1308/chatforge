@@ -4,7 +4,8 @@ import {
   type ServerResponse,
 } from "node:http";
 import { Worker } from "node:worker_threads";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { access, readFile, readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { resolve, extname, sep } from "node:path";
 import { randomBytes } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
@@ -39,6 +40,35 @@ let sequence = 0;
 let lastSnapshot: string | undefined;
 let stopping = false;
 let simulationReady = false;
+let overlayClients = 0;
+let openAIHealth:
+  | "unverified"
+  | "checking"
+  | "healthy"
+  | "invalid"
+  | "unavailable"
+  | "missing" = process.env.OPENAI_API_KEY ? "unverified" : "missing";
+async function checkOpenAI(): Promise<void> {
+  if (!process.env.OPENAI_API_KEY) {
+    openAIHealth = "missing";
+    return;
+  }
+  openAIHealth = "checking";
+  try {
+    const response = await fetch("https://api.openai.com/v1/models", {
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    openAIHealth = response.ok
+      ? "healthy"
+      : response.status === 401 || response.status === 403
+        ? "invalid"
+        : "unavailable";
+  } catch {
+    openAIHealth = "unavailable";
+  }
+}
+const tickBins = Array<number>(1001).fill(0);
 const exampleDirectory = resolve(process.cwd(), "examples");
 const runtimeDirectory = resolve(process.cwd(), "../../runtime/mods");
 async function readMod(id: string): Promise<string> {
@@ -119,11 +149,20 @@ const forge = new ForgeLoop(audience.inbox, {
       sendCommand({ type: "rollback", modId }) as Promise<HostCheckpoint>,
     safeMode: () =>
       sendCommand({ type: "safe-mode" }) as Promise<HostCheckpoint>,
+    retire: (modId) =>
+      sendCommand({ type: "retire", modId }) as Promise<HostCheckpoint>,
+    restore: async (checkpoint) => {
+      await sendCommand({ type: "restore", checkpoint });
+    },
     celebrate: async (text) => {
       await sendCommand({ type: "celebrate", text });
     },
   },
   gate: runGate,
+  connection: () => ({
+    twitchEnabled: audience.config.sources.includes("twitch"),
+    eventsub: audience.eventsub.state,
+  }),
   diagnostic: (error) =>
     console.error(
       "Forge diagnostic:",
@@ -215,8 +254,45 @@ const server = createServer(async (req, res) => {
       json(res, 200, audience.status());
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/readiness") {
+      let codexLoginFound = false;
+      try {
+        await access(
+          resolve(
+            process.env.CODEX_HOME ?? resolve(homedir(), ".codex"),
+            "auth.json",
+          ),
+        );
+        codexLoginFound = true;
+      } catch {
+        /* Local login has not been found. */
+      }
+      const status = audience.status();
+      json(res, 200, {
+        twitch: status.auth.health === "healthy",
+        eventsub:
+          status.eventsub.state === "connected" &&
+          status.eventsub.subscriptions.some(
+            (s) => s.type === "channel.chat.message" && s.status === "enabled",
+          ),
+        codexLoginFound,
+        openAIHealth,
+        overlay: overlayClients > 0,
+        safeMode: audience.inbox.setting("safe-mode") === "true",
+        simulationReady,
+      });
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/forge") {
       json(res, 200, forge.view());
+      return;
+    }
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/metrics" &&
+      process.env.CHATFORGE_METRICS === "1"
+    ) {
+      json(res, 200, { rss: process.memoryUsage().rss, tickBins });
       return;
     }
     if (req.method === "GET" && url.pathname === "/forge/patch-notes") {
@@ -241,6 +317,8 @@ const server = createServer(async (req, res) => {
         const input = (await body(req)) as {
           preset?: unknown;
           modId?: unknown;
+          enabled?: unknown;
+          limit?: unknown;
         };
         switch (url.pathname.slice("/api/forge/".length)) {
           case "start":
@@ -272,6 +350,14 @@ const server = createServer(async (req, res) => {
           case "safe-mode":
             await forge.safeMode();
             break;
+          case "retirement":
+            if (
+              typeof input.enabled !== "boolean" ||
+              typeof input.limit !== "number"
+            )
+              throw Error("Invalid retirement settings");
+            await forge.setRetirement(input.enabled, input.limit);
+            break;
           default:
             json(res, 404, { error: "Not found" });
             return;
@@ -280,6 +366,9 @@ const server = createServer(async (req, res) => {
       } else if (url.pathname === "/api/config") {
         audience.configure(await body(req));
         json(res, 200, { ok: true });
+      } else if (url.pathname === "/api/readiness/check-openai") {
+        await checkOpenAI();
+        json(res, 200, { openAIHealth });
       } else if (url.pathname === "/api/chat/test")
         json(res, 200, { queued: audience.testMessage() });
       else json(res, 404, { error: "Not found" });
@@ -316,7 +405,8 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, {
         "Content-Type": mime[extname(file)]!,
         "Content-Security-Policy":
-          "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://localhost:* ws://127.0.0.1:*; frame-ancestors 'self'",
+          "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://localhost:* ws://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'",
+        "X-Content-Type-Options": "nosniff",
       });
       res.end(data);
       return;
@@ -392,7 +482,16 @@ const sockets = new WebSocketServer({
   maxPayload: 1024,
   verifyClient: ({ req }: { req: IncomingMessage }) => localRequest(req, port),
 });
-sockets.on("connection", (socket) => {
+sockets.on("connection", (socket, req) => {
+  const isOverlay =
+    new URL(req.url ?? "/", "http://localhost").searchParams.get("client") ===
+    "overlay";
+  if (isOverlay) {
+    overlayClients++;
+    socket.once("close", () => {
+      overlayClients = Math.max(0, overlayClients - 1);
+    });
+  }
   if (lastSnapshot) socket.send(lastSnapshot);
   socket.send(JSON.stringify(forge.view()));
   socket.on("message", () => socket.close(1008, "Read-only overlay"));
@@ -406,8 +505,16 @@ worker.on(
     error?: string;
     result?: unknown;
     checkpoint?: HostCheckpoint;
+    bins?: number[];
   }) => {
-    if (message.type === "snapshot") {
+    if (
+      message.type === "performance" &&
+      message.bins?.length === tickBins.length
+    ) {
+      message.bins.forEach((count, index) => {
+        tickBins[index]! += count;
+      });
+    } else if (message.type === "snapshot") {
       lastSnapshot = JSON.stringify(message);
       for (const client of sockets.clients)
         if (

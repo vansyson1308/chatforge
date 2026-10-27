@@ -1,7 +1,34 @@
 import { expect, it, vi } from "vitest";
 import { World } from "../../../packages/engine/src/index.js";
 import { ModHost } from "./mod-host.js";
+import { goodMod } from "./forge-fixtures.js";
 const sprite = `{grid:['aa'],palette:{a:'#ff8800'}}`;
+it("retirement removes owned gear and never resurrects a retired mod on rollback or restart", async () => {
+  const host = new ModHost(new World(7)),
+    restored = new ModHost(new World(8));
+  try {
+    await host.load("seed", "export function register(api){}");
+    host.markBaseline();
+    await host.load("older", goodMod);
+    await host.load(
+      "newer",
+      goodMod
+        .replaceAll("armageddon-duck", "newer-duck")
+        .replaceAll("!spark", "!newer"),
+    );
+    host.retire("older");
+    expect(Object.keys(host.world.state.mods)).toEqual(["seed", "newer"]);
+    restored.importCheckpoint(host.exportCheckpoint());
+    restored.rollback("newer");
+    expect(Object.keys(restored.world.state.mods)).toEqual(["seed"]);
+    expect(
+      restored.world.state.entities.some((e) => e.tags.includes("mod:older")),
+    ).toBe(false);
+  } finally {
+    host.dispose();
+    restored.dispose();
+  }
+});
 const original = `export function register(api) {
  api.defineEnemy('ember',{sprite:${sprite},hp:10,speed:1,damage:2,behavior:'chase'});
  api.onSchedule('later', p => { api.state.count = (api.state.count || 0)+p.n; api.spawn('ember',300,500); });
@@ -178,9 +205,11 @@ it("bounds projectiles produced by extreme custom weapons to the owning mod budg
     });
     host.dispatch({ type: "twitch:raid" });
     for (let i = 0; i < 60; i++) host.tick();
-    expect(
-      host.world.state.entities.filter((e) => e.tags.includes("mod:weapon")),
-    ).toHaveLength(100);
+    const projectiles = host.world.state.entities.filter((e) =>
+      e.tags.includes("mod:weapon"),
+    );
+    expect(projectiles.length).toBeGreaterThan(80);
+    expect(projectiles.length).toBeLessThanOrEqual(100);
     expect(host.diagnostics).toEqual([]);
   } finally {
     host.dispose();

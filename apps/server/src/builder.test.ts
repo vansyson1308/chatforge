@@ -1,7 +1,9 @@
 import { beforeEach, expect, it, vi } from "vitest";
+const testTempRoot = resolve(process.cwd(), "runtime/tmp");
+mkdirSync(testTempRoot, { recursive: true });
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { mkdirSync } from "node:fs";
 import { World } from "../../../packages/engine/src/index.js";
 import { goodMod, testCards } from "./forge-fixtures.js";
 const mock = vi.hoisted(() => ({
@@ -72,7 +74,7 @@ beforeEach(() => {
   mock.tamper = false;
 });
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "chatforge-builder-"));
+  const root = await mkdtemp(join(testTempRoot, "chatforge-builder-"));
   for (const dir of [
     "docs",
     "packages/mod-api/src",

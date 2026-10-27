@@ -1,7 +1,7 @@
 import { Codex } from "@openai/codex-sdk";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdtemp, mkdir, rm } from "node:fs/promises";
+
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 
@@ -14,7 +14,9 @@ if (loaded.parsed?.OPENAI_API_KEY)
 const model = process.env.CODEX_MODEL || "gpt-6.1-sol";
 const auth = process.env.CODEX_SMOKE_AUTH || "chatgpt";
 
-const workspace = await mkdtemp(join(tmpdir(), "chatforge-codex-smoke-"));
+const testTempRoot = resolve("../../runtime/tmp");
+await mkdir(testTempRoot, { recursive: true });
+const workspace = await mkdtemp(join(testTempRoot, "chatforge-codex-smoke-"));
 let thread;
 try {
   if (auth !== "chatgpt" && auth !== "api-key")

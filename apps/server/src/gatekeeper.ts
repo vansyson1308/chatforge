@@ -7,6 +7,8 @@ import {
 } from "../../../packages/engine/src/index.js";
 import {
   forgeTestSchema,
+  formatCredit,
+  type ForgeCard,
   type ForgeTest,
   type GateReport,
 } from "../../../packages/shared/src/forge.js";
@@ -175,6 +177,7 @@ export interface GateInput {
   commands: string[];
   baselineOnly?: boolean;
   spectacle?: boolean;
+  credits?: ForgeCard["credits"];
 }
 export async function checkBaseline(
   checkpoint: WorldState,
@@ -263,6 +266,7 @@ export async function gatekeeper(
       const fx = new Set<string>(),
         kinds = new Set<string>(),
         rules = new Map<string, number>();
+      const banners: string[] = [];
       let effects = 0;
       const drawnSprites = new Set<string>(),
         spawnedIds = new Set<number>();
@@ -359,6 +363,8 @@ export async function gatekeeper(
                       ? Number(effect.intensity) > 0 && Number(effect.ticks) > 0
                       : Number(effect.ticks) > 0;
               if (visible) {
+                if (effect.type === "banner")
+                  banners.push(String(effect.text ?? ""));
                 fx.add(effect.type);
                 effects++;
                 if (first < 0) first = tick;
@@ -398,6 +404,29 @@ export async function gatekeeper(
         report.effects = effects;
         const commands = host.commands(input.modId).length,
           durationSeconds = (last - first) / 30;
+        if (input.credits?.length) {
+          if (
+            !input.credits.some((credit) =>
+              banners.some((banner) => banner.includes(formatCredit(credit))),
+            )
+          )
+            throw Error(
+              "Credit banner missing: include at least one contributor as @name or @name (SIM); acknowledge the others in the HUD.",
+            );
+          for (const credit of input.credits.filter(
+            (c) => c.source === "simulator",
+          ))
+            if (
+              banners.some(
+                (banner) =>
+                  banner.includes(`@${credit.name}`) &&
+                  !banner.includes(formatCredit(credit)),
+              )
+            )
+              throw Error(
+                "Simulated contributor in banner must be followed by (SIM).",
+              );
+        }
         const score =
           (first >= 0 && first <= 300 ? 2 : 0) +
           (commands > 0 ? 2 : 0) +

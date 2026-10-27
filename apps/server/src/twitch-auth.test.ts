@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+const testTempRoot = resolve(process.cwd(), "runtime/tmp");
+mkdirSync(testTempRoot, { recursive: true });
 import { createServer, type Server } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { OAuthStates, SCOPES, TwitchAuth } from "./twitch-auth.js";
 
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -85,7 +87,7 @@ async function fixture() {
     );
   });
   const base = await listen(server);
-  const dir = await mkdtemp(join(tmpdir(), "chatforge-auth-"));
+  const dir = await mkdtemp(join(testTempRoot, "chatforge-auth-"));
   cleanups.push(() => rm(dir, { recursive: true, force: true }));
   const file = join(dir, "secrets", "twitch.json");
   const options = {

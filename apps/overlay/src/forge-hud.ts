@@ -1,68 +1,124 @@
-import type {
-  ForgeView,
-  ForgeCard,
+import {
+  formatCredit,
+  type ForgeCard,
+  type ForgeView,
 } from "../../../packages/shared/src/forge.js";
-let identity = "",
-  changedAt = 0,
-  newestIdea = "",
-  ideaChangedAt = 0;
+let phaseKey = "",
+  phaseAt = 0,
+  newest = "",
+  ideaAt = 0;
 const bars = [0, 0, 0];
-const metrics = new Map<string, number>();
-function measure(ctx: CanvasRenderingContext2D, text: string): number {
-  const key = ctx.font + "/" + text;
-  const known = metrics.get(key);
-  if (known !== undefined) return known;
-  const width = ctx.measureText(text).width;
-  if (metrics.size >= 2048) metrics.clear();
-  metrics.set(key, width);
-  return width;
+const widths = new Map<string, number>();
+const slots = {
+  top: { x: 310, y: 24, w: 866, h: 88 },
+  left: { x: 24, y: 132, w: 420, h: 480 },
+  right: { x: 900, y: 132, w: 276, h: 275 },
+  center: { x: 400, y: 127, w: 400, h: 53 },
+  ticker: { x: 24, y: 630, w: 1152, h: 30 },
+} as const;
+function font(ctx: CanvasRenderingContext2D, size: number, bold = false) {
+  ctx.font = `${bold ? "bold " : ""}${size}px ${bold ? "monospace" : "Segoe UI, sans-serif"}`;
 }
-function line(
+function measure(ctx: CanvasRenderingContext2D, s: string) {
+  const key = ctx.font + "\n" + s;
+  let n = widths.get(key);
+  if (n === undefined) {
+    n = ctx.measureText(s).width;
+    if (widths.size > 2048) widths.clear();
+    widths.set(key, n);
+  }
+  return n;
+}
+function rows(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  width: number,
+): string[] {
+  const words = text.trim().split(/\s+/u);
+  const out: string[] = [];
+  let row = "";
+  for (const word of words) {
+    let rest = word;
+    while (rest) {
+      const candidate = row ? row + " " + rest : rest;
+      if (measure(ctx, candidate) <= width) {
+        row = candidate;
+        break;
+      }
+      if (row) {
+        out.push(row);
+        row = "";
+        continue;
+      }
+      let end = rest.length;
+      while (end > 1 && measure(ctx, rest.slice(0, end)) > width) end--;
+      out.push(rest.slice(0, end));
+      rest = rest.slice(end);
+    }
+  }
+  if (row) out.push(row);
+  return out;
+}
+function fit(
   ctx: CanvasRenderingContext2D,
   text: string,
   x: number,
   y: number,
   width: number,
-  size = 18,
-  color = "#f6ead7",
+  maxLines: number,
+  size: number,
+  floor: number,
+  color: string,
   bold = false,
-) {
-  ctx.font = `${bold ? "bold " : ""}${size}px ${bold ? "monospace" : "Segoe UI, sans-serif"}`;
+): void {
+  let lines: string[] = [];
+  for (; size >= floor; size--) {
+    font(ctx, size, bold);
+    lines = rows(ctx, text, width);
+    if (lines.length <= maxLines) break;
+  }
+  size = Math.max(size, floor);
+  font(ctx, size, bold);
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines);
+    let last = lines[maxLines - 1] ?? "";
+    while (last && measure(ctx, last + "…") > width) last = last.slice(0, -1);
+    lines[maxLines - 1] = last.trimEnd() + "…";
+  }
   ctx.fillStyle = color;
   ctx.textAlign = "left";
-  let result = text;
-  while (result.length && measure(ctx, result) > width)
-    result = result.slice(0, -1);
-  ctx.fillText(
-    result.length < text.length ? result.slice(0, -1) + "…" : result,
-    x,
-    y,
-  );
+  lines.forEach((s, i) => ctx.fillText(s, x, y + i * (size + 3)));
 }
-function wrap(
+function creditSummary(
   ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
+  credits: ForgeCard["credits"],
   width: number,
-  lines = 2,
-  size = 18,
-  color = "#e6ded1",
-  bold = false,
-) {
-  ctx.font = `${bold ? "bold " : ""}${size}px ${bold ? "monospace" : "Segoe UI, sans-serif"}`;
-  const words = text.split(" ");
-  let row = "",
-    n = 0;
-  for (const word of words) {
-    if (measure(ctx, row + " " + word) > width && row) {
-      line(ctx, row, x, y + n * (size + 3), width, size, color, bold);
-      if (++n >= lines) return;
-      row = word;
-    } else row += (row ? " " : "") + word;
+): string {
+  const list = credits.map(formatCredit);
+  if (!list.length) return "Forge suggestion";
+  font(ctx, 17);
+  for (let count = list.length; count >= 0; count--) {
+    const omitted = list.length - count;
+    const value =
+      list.slice(0, count).join(", ") +
+      (omitted ? `${count ? ", " : ""}+${omitted} more` : "");
+    if (measure(ctx, value) <= width) return value;
   }
-  if (n < lines)
-    line(ctx, row, x, y + n * (size + 3), width, size, color, bold);
+  return `+${list.length} more`;
+}
+function visibleCredit(
+  ctx: CanvasRenderingContext2D,
+  credit: { name: string; source: string },
+  width: number,
+): string {
+  font(ctx, 15, true);
+  const chars = Array.from(credit.name);
+  let value = formatCredit(credit);
+  while (chars.length && measure(ctx, value) > width) {
+    chars.pop();
+    value = formatCredit({ ...credit, name: chars.join("") + "…" });
+  }
+  return value;
 }
 function panel(
   ctx: CanvasRenderingContext2D,
@@ -72,17 +128,22 @@ function panel(
   h: number,
   accent = "#ffad54",
 ) {
-  ctx.fillStyle = "#111c29f5";
+  ctx.fillStyle = "#111c29";
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = accent;
   ctx.fillRect(x, y, 4, h);
 }
-function credits(card: ForgeCard) {
-  return (
-    card.credits
-      .map((c) => `${c.source === "simulator" ? "SIM " : ""}@${c.name}`)
-      .join(" · ") || "Forge suggestion"
-  );
+function drawText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  size = 18,
+  color = "#f6ead7",
+  bold = false,
+) {
+  fit(ctx, text, x, y, width, 1, size, size, color, bold);
 }
 export function drawForgeHud(
   ctx: CanvasRenderingContext2D,
@@ -109,46 +170,71 @@ export function drawForgeHud(
   const phase = active?.stage ?? "IDLE",
     now = performance.now(),
     key = `${active?.id}/${phase}/${active?.attempts}`;
-  if (key !== identity) {
-    identity = key;
-    changedAt = now;
+  if (key !== phaseKey) {
+    phaseKey = key;
+    phaseAt = now;
   }
-  const age = now - changedAt,
+  const age = now - phaseAt,
     winner = build?.cards[build.winner ?? 0];
   const seconds = active?.deadline
     ? Math.max(0, Math.ceil((active.deadline - view.now - elapsed) / 1000))
     : 0;
-  const caption =
-    phase === "CURATING"
-      ? "SHAPING CHAT IDEAS"
-      : phase === "IDLE"
-        ? "THE FORGE IS READY"
-        : phase === "COLLECTING"
-          ? "TYPE !idea — WHAT SHOULD WE FORGE?"
-          : phase === "VOTING"
-            ? "YOUR VOTE CHANGES THIS WORLD"
-            : phase === "STREAMER_APPROVAL"
-              ? "CHAT HAS SPOKEN"
-              : phase === "LIVE"
-                ? "CHAT SHIPPED THE GAME"
-                : phase === "FAILED"
-                  ? "BUILD REJECTED — THE GAME STAYS SAFE"
-                  : phase === "ROLLED_BACK"
-                    ? "ROLLBACK — THE KEEP IS SAFE"
-                    : "CODEX IS FORGING";
-  panel(ctx, 310, 24, 866, 88, phase === "FAILED" ? "#ff7964" : "#ffad54");
-  line(ctx, caption, 332, 58, 755, 28, "#ffbd78", true);
-  line(
+  const headings: Record<string, string> = {
+    IDLE: "THE FORGE IS READY",
+    COLLECTING: "TYPE !idea — YOUR WORLD, YOUR CALL",
+    CURATING: "SHAPING CHAT IDEAS",
+    VOTING: "YOUR VOTE CHANGES THE WORLD",
+    STREAMER_APPROVAL: "CHAT HAS CHOSEN",
+    BUILDING: "CODEX IS FORGING",
+    TESTING: "GATEKEEPER IS TESTING",
+    DEPLOYING: "PATCH ENTERING THE WORLD",
+    LIVE: "SHIPPED!",
+    FAILED: "BUILD REJECTED — GAME STAYS SAFE",
+    ROLLED_BACK: "ROLLBACK — THE KEEP IS SAFE",
+  };
+  const subtitle =
+    view.connection?.twitchEnabled && view.connection.eventsub !== "connected"
+      ? "TWITCH CHAT DISCONNECTED — RECONNECTING"
+      : phase === "COLLECTING"
+        ? `${view.ideaCount} ideas collected`
+        : phase === "VOTING"
+          ? "TYPE !vote 1   /   !vote 2   /   !vote 3"
+          : phase === "LIVE" && winner
+            ? `${winner.title}  ·  TRY ${winner.commands.join(" ")}`
+            : phase === "BUILDING"
+              ? "Turning the winning idea into a mod"
+              : phase === "TESTING"
+                ? "Checking the world and candidate deterministically"
+                : phase === "DEPLOYING"
+                  ? "Applying the tested patch"
+                  : phase === "STREAMER_APPROVAL"
+                    ? "The winning idea is ready for approval"
+                    : phase === "CURATING"
+                      ? "Turning viewer ideas into three cards"
+                      : phase === "FAILED" || phase === "ROLLED_BACK"
+                        ? "The last safe version remains active"
+                        : "Chat imagines it. Codex builds it.";
+  panel(
     ctx,
-    phase === "COLLECTING"
-      ? `${view.ideaCount} ideas · Creatures. Gear. Bosses. Your call.`
-      : phase === "VOTING"
-        ? "TYPE !vote 1   /   !vote 2   /   !vote 3"
-        : view.notice,
-    332,
-    88,
-    755,
+    slots.top.x,
+    slots.top.y,
+    slots.top.w,
+    slots.top.h,
+    phase === "FAILED" ? "#ff7964" : "#ffad54",
   );
+  fit(
+    ctx,
+    headings[phase] ?? headings.IDLE!,
+    332,
+    58,
+    755,
+    1,
+    28,
+    22,
+    "#ffbd78",
+    true,
+  );
+  fit(ctx, subtitle, 332, 88, 755, 1, 18, 16, "#f6ead7");
   ctx.strokeStyle = "#455260";
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -164,254 +250,214 @@ export function drawForgeHud(
     -Math.PI / 2 + (Math.PI * 2 * (seconds % 60)) / 60,
   );
   ctx.stroke();
-  line(ctx, seconds ? String(seconds) : "✦", 1116, 75, 50, 22, "#fff1d7", true);
-  if (round?.stage === "VOTING") {
+  drawText(
+    ctx,
+    seconds ? String(seconds) : "✦",
+    1116,
+    75,
+    50,
+    22,
+    "#fff1d7",
+    true,
+  );
+  if (round?.stage === "VOTING" && phase === "VOTING") {
     const total = round.tallies.reduce((a, b) => a + b, 0) || 1;
     round.cards.forEach((card, i) => {
-      const y = 132 + i * 162,
+      const y = slots.left.y + i * 162,
         pct = (round.tallies[i] ?? 0) / total;
       bars[i]! += (pct - bars[i]!) * 0.08;
-      panel(ctx, 24, y, 420, 160, round.winner === i ? "#a8edbb" : "#ffad54");
-      line(ctx, `!vote ${i + 1}`, 40, y + 27, 115, 20, "#ffbd78", true);
-      line(
+      panel(ctx, 24, y, 420, 158);
+      drawText(ctx, `!vote ${i + 1}`, 40, y + 23, 110, 19, "#ffbd78", true);
+      drawText(
         ctx,
         `${Math.round(pct * 100)}% · ${round.tallies[i] ?? 0}`,
-        237,
-        y + 27,
-        126,
+        292,
+        y + 23,
+        130,
+        18,
       );
-      wrap(ctx, card.title, 40, y + 54, 388, 2, 28, "#fff1d7", true);
-      line(ctx, card.visualHook, 40, y + 108, 388, 18);
-      wrap(ctx, credits(card), 40, y + 130, 388, 2, 18, "#a8edbb");
+      fit(ctx, card.title, 40, y + 52, 388, 2, 27, 20, "#fff1d7", true);
+      fit(ctx, card.pitch, 40, y + 100, 388, 2, 17, 15, "#e6ded1");
+      drawText(
+        ctx,
+        creditSummary(ctx, card.credits, 388),
+        40,
+        y + 145,
+        388,
+        17,
+        "#a8edbb",
+      );
       ctx.fillStyle = "#263544";
-      ctx.fillRect(40, y + 157, 388, 4);
+      ctx.fillRect(40, y + 154, 388, 3);
       ctx.fillStyle = "#ffad54";
-      ctx.fillRect(40, y + 157, 388 * bars[i]!, 4);
+      ctx.fillRect(40, y + 154, 388 * bars[i]!, 3);
     });
   } else if (phase === "COLLECTING" || phase === "CURATING") {
-    line(ctx, "FROM THE CHAT", 40, 154, 330, 22, "#ffbd78", true);
+    drawText(ctx, "FROM THE CHAT", 40, 154, 330, 22, "#ffbd78", true);
     const incoming = JSON.stringify(view.ideas?.[0]);
-    if (incoming !== newestIdea) {
-      newestIdea = incoming;
-      ideaChangedAt = now;
+    if (incoming !== newest) {
+      newest = incoming;
+      ideaAt = now;
     }
     (view.ideas ?? []).forEach((idea, i) => {
       const y = 173 + i * 92,
-        slide = Math.max(0, 1 - (now - ideaChangedAt) / 500) * 35;
+        slide = Math.max(0, 1 - (now - ideaAt) / 500) * 30;
       panel(ctx, 24 - slide, y, 354, 82);
-      line(
+      fit(
         ctx,
-        `${idea.source === "simulator" ? "SIM " : ""}@${idea.author}`,
+        visibleCredit(ctx, { name: idea.author, source: idea.source }, 320),
         40 - slide,
-        y + 25,
+        y + 24,
         320,
+        1,
         18,
+        15,
         "#a8edbb",
         true,
       );
-      wrap(ctx, idea.text, 40 - slide, y + 50, 320, 1);
+      fit(ctx, idea.text, 40 - slide, y + 49, 320, 2, 17, 15, "#e6ded1");
     });
   }
-  if (build && winner && build.stage !== "IDLE") {
-    const fail = phase === "FAILED" || phase === "ROLLED_BACK";
-    panel(ctx, 820, 137, 356, 300, fail ? "#ff7964" : "#ffad54");
-    line(
-      ctx,
-      phase === "LIVE"
-        ? "SHIPPED!"
-        : fail
-          ? "GAME STAYS SAFE"
-          : "CODEX / LIVE BUILD",
-      838,
-      171,
-      318,
-      28,
-      fail ? "#ff7964" : "#ffbd78",
-      true,
-    );
-    wrap(ctx, winner.title, 838, 208, 318, 2, 24, "#fff1d7");
-    line(
+  if (
+    !hall &&
+    build &&
+    winner &&
+    ["BUILDING", "TESTING", "DEPLOYING", "FAILED", "ROLLED_BACK"].includes(
+      phase,
+    )
+  ) {
+    const x = slots.right.x,
+      y = slots.right.y,
+      w = slots.right.w,
+      failed = build.report?.checks.find((c) => !c.ok);
+    panel(ctx, x, y, w, slots.right.h, failed ? "#ff7964" : "#ffad54");
+    fit(ctx, winner.title, x + 16, y + 30, w - 32, 2, 23, 18, "#fff1d7", true);
+    drawText(
       ctx,
       `${(build.durationMs / 1000).toFixed(0)}s · attempt ${build.attempts}/3`,
-      838,
-      257,
-      318,
+      x + 16,
+      y + 82,
+      w - 32,
+      17,
     );
     const step = phase === "BUILDING" ? 1 : phase === "TESTING" ? 2 : 3;
     ["SPEC", "CODE", "TEST", "DEPLOY"].forEach((s, i) => {
-      line(
+      drawText(
         ctx,
         s,
-        838 + i * 80,
-        291,
-        78,
-        18,
+        x + 16 + i * 60,
+        y + 112,
+        58,
+        14,
         i <= step ? "#ffbd78" : "#87929e",
         true,
       );
       ctx.fillStyle = i <= step ? "#ffad54" : "#394857";
-      ctx.fillRect(838 + i * 80, 300, 69, 4);
+      ctx.fillRect(x + 16 + i * 60, y + 121, 52, 3);
     });
-    wrap(
+    fit(
       ctx,
-      (view.activity.at(-1) ?? "Reading the community specification").slice(
-        0,
-        Math.max(20, Math.floor(age / 15)),
-      ),
-      838,
-      330,
-      318,
+      view.activity.at(-1) ?? "Preparing the community specification",
+      x + 16,
+      y + 151,
+      w - 32,
+      3,
+      17,
+      15,
+      "#e6ded1",
     );
-    const failed = build.report?.checks.find((c) => !c.ok);
-    wrap(
+    fit(
       ctx,
       failed
         ? `CAUGHT A BUG: ${failed.detail}`
         : build.report?.ok
-          ? `GATEKEEPER PASS · spectacle ${build.report.spectacle?.score ?? "—"}/10`
-          : "Testing before deploy. Your world stays live.",
-      838,
-      389,
-      318,
+          ? `Gatekeeper passed · ${build.report.spectacle?.score ?? "-"}/10`
+          : "The world stays live during checks",
+      x + 16,
+      y + 218,
+      w - 32,
       2,
-      18,
+      16,
+      14,
       failed ? "#ffab97" : "#a8edbb",
     );
-    if (build.attempts > 1 && phase === "BUILDING")
-      line(
-        ctx,
-        `Codex is repairing (${build.attempts}/3)`,
-        838,
-        460,
-        320,
-        18,
-        "#ffad54",
-        true,
-      );
-    if ((phase === "LIVE" || phase === "BUILDING" || fail) && age < 4500) {
-      const slam = Math.max(0, 1 - age / 350) * 45;
-      panel(ctx, 398, 125 - slam, 402, 60, fail ? "#ff7964" : "#ffad54");
-      line(
-        ctx,
-        phase === "LIVE"
-          ? "SHIPPED!"
-          : fail
-            ? "BUILD REJECTED"
-            : "THE WINNER → THE ANVIL",
-        414,
-        154 - slam,
-        372,
-        24,
-        "#ffbd78",
-        true,
-      );
-      line(
-        ctx,
-        phase === "LIVE" ? credits(winner) : winner.title,
-        414,
-        184 - slam,
-        372,
-      );
-      ctx.fillStyle = "#ffbd78";
-      ctx.fillRect(724, 180, 60, 6);
-      ctx.fillRect(737, 186, 34, 6);
-    }
-    if (phase === "LIVE") {
-      line(
-        ctx,
-        `TRY ${winner.commands.join("  ")}`,
-        820,
-        475,
-        356,
-        24,
-        "#ffbd78",
-        true,
-      );
-      wrap(ctx, credits(winner), 820, 508, 356, 3, 18, "#a8edbb");
-    }
   }
-  if (round?.stage === "STREAMER_APPROVAL" && round.winner !== null) {
-    const card = round.cards[round.winner]!;
-    const drop = Math.max(0, 1 - age / 500) * 45;
-    panel(ctx, 398, 125 - drop, 402, 60);
-    line(ctx, "CHAT HAS CHOSEN", 414, 154 - drop, 372, 28, "#ffbd78", true);
-    line(ctx, card.title, 414, 184 - drop, 372, 22);
-    ctx.fillStyle = "#ffbd78";
-    ctx.fillRect(724, 180, 60, 6);
-    ctx.fillRect(737, 186, 34, 6);
+  const selected =
+    phase === "STREAMER_APPROVAL" && round?.winner !== null
+      ? round?.cards[round.winner ?? 0]
+      : undefined;
+  if (selected && age < 3500) {
+    const y = slots.center.y + Math.min(0, (age - 300) / 10);
+    panel(ctx, slots.center.x, y, slots.center.w, slots.center.h);
+    drawText(
+      ctx,
+      "WINNING IDEA",
+      416,
+      y + 21,
+      370,
+      17,
+      "#ffbd78",
+      true,
+    );
+    fit(ctx, selected.title, 416, y + 45, 370, 1, 21, 17, "#fff1d7");
   }
-  if ((phase === "FAILED" || phase === "ROLLED_BACK") && age < 900) {
-    ctx.fillStyle = `rgba(255,74,45,${0.18 * (1 - age / 900)})`;
+  if ((phase === "FAILED" || phase === "ROLLED_BACK") && age < 700) {
+    ctx.fillStyle = `rgba(255,74,45,${0.14 * (1 - age / 700)})`;
     ctx.fillRect(0, 0, 1200, 675);
   }
-  if (phase === "TESTING" && build) {
-    const checks = build.report?.checks ?? [];
-    [
-      "baseline (host responsibility)",
-      "static contract",
-      "simulation 1",
-      "simulation 2",
-      "determinism",
-    ].forEach((name, i) => {
-      const check = checks.find((c) => c.name === name);
-      line(
-        ctx,
-        `${check ? (check.ok ? "✓" : "×") : "○"} ${["Live baseline", "Static contract", "Simulation 1", "Simulation 2", "Deterministic hash"][i]}`,
-        838,
-        465 + i * 25,
-        318,
-        18,
-        check?.ok ? "#a8edbb" : check ? "#ff7964" : "#9aa5b1",
-      );
-    });
-  }
   if (hall) {
-    panel(ctx, 820, 137, 356, 460);
-    line(ctx, "HALL OF PATCHES", 838, 172, 320, 28, "#ffbd78", true);
+    const x = slots.right.x,
+      y = slots.right.y,
+      w = slots.right.w;
+    panel(ctx, x, y, w, 460);
+    fit(
+      ctx,
+      "HALL OF PATCHES",
+      x + 16,
+      y + 34,
+      w - 32,
+      1,
+      23,
+      19,
+      "#ffbd78",
+      true,
+    );
     (view.patches ?? view.mods).slice(-5).forEach((mod, i) => {
-      line(
+      fit(
         ctx,
         `${i + 1}. ${mod.title}`,
-        838,
-        215 + i * 74,
-        320,
-        21,
+        x + 16,
+        y + 76 + i * 74,
+        w - 32,
+        2,
+        19,
+        16,
         "#fff1d7",
         true,
       );
-      line(
+      fit(
         ctx,
-        mod.credits
-          .map((c) => `${c.source === "simulator" ? "SIM " : ""}@${c.name}`)
-          .join(" · ") || "Forge suggestion",
-        838,
-        241 + i * 74,
-        320,
-        18,
+        creditSummary(ctx, mod.credits, w - 32),
+        x + 16,
+        y + 120 + i * 74,
+        w - 32,
+        1,
+        16,
+        14,
         "#a8edbb",
       );
     });
   }
-  panel(ctx, 24, 630, 1152, 30);
-  const ticker =
-    (view.patches ?? view.mods)
-      .map(
-        (m) =>
-          `${m.title} — ${m.credits.map((c) => `${c.source === "simulator" ? "SIM " : ""}@${c.name}`).join(", ") || "Forge suggestion"}`,
-      )
-      .join("     ✦     ") ||
-    "CHATFORGE   /   Chat imagines it. Codex builds it. The world changes live.";
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(40, 631, 1116, 28);
-  ctx.clip();
-  line(
-    ctx,
-    ticker,
-    40 - ((now / 50) % Math.max(1, measure(ctx, ticker))),
-    651,
-    5000,
-  );
-  ctx.restore();
+  panel(ctx, slots.ticker.x, slots.ticker.y, slots.ticker.w, slots.ticker.h);
+  const entries = view.patches ?? view.mods;
+  const entry = entries.length
+    ? entries[Math.floor(now / 6500) % entries.length]!
+    : undefined;
+  font(ctx, 17);
+  const prefix = entry ? `✦  ${entry.title} — ` : "✦  CHATFORGE  ·  ";
+  const suffix = entry
+    ? creditSummary(ctx, entry.credits, 1116 - measure(ctx, prefix))
+    : "Chat imagines it. Codex builds it.";
+  fit(ctx, prefix + suffix, 40, 651, 1116, 1, 17, 17, "#f6ead7");
   ctx.restore();
 }
