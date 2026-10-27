@@ -1,0 +1,459 @@
+import type {
+  ForgeRound,
+  ForgeStage,
+  ForgeView,
+  GateReport,
+} from "../../../packages/shared/src/forge.js";
+import type { Chat } from "../../../packages/shared/src/chat.js";
+import type { HostCheckpoint } from "./mod-host.js";
+import type { GateInput } from "./gatekeeper.js";
+import type { Builder } from "./builder.js";
+import type { Producer } from "./producer.js";
+import { worldOnlyReason } from "./producer.js";
+import { IdeaInbox, sanitize } from "./chat-router.js";
+import { ForgeStore } from "./forge-store.js";
+
+export interface ForgeSimulation {
+  checkpoint(): Promise<HostCheckpoint>;
+  deploy(id: string, source: string): Promise<void>;
+  rollback(id?: string): Promise<HostCheckpoint>;
+  safeMode(): Promise<HostCheckpoint>;
+  celebrate(text: string): Promise<void>;
+}
+export interface ForgeOptions {
+  producer: Producer;
+  builder: Builder;
+  simulation: ForgeSimulation;
+  gate(input: GateInput, signal: AbortSignal): Promise<GateReport>;
+  broadcast(view: ForgeView): void;
+  announce(text: string): void;
+  resetRound(): void;
+  now?: () => number;
+  buildTimeoutMs?: number;
+  buildCap?: number;
+  diagnostic?(error: unknown): void;
+  autoCollect?: boolean;
+}
+const presets = {
+  demo: { collect: 45000, vote: 30000, approval: 10000 },
+  normal: { collect: 90000, vote: 45000, approval: null },
+};
+const transitions: Record<ForgeStage, ForgeStage[]> = {
+  IDLE: ["COLLECTING"],
+  COLLECTING: ["CURATING", "FAILED"],
+  CURATING: ["VOTING", "FAILED"],
+  VOTING: ["STREAMER_APPROVAL", "FAILED"],
+  STREAMER_APPROVAL: ["BUILDING", "FAILED"],
+  BUILDING: ["TESTING", "FAILED"],
+  TESTING: ["BUILDING", "DEPLOYING", "FAILED"],
+  DEPLOYING: ["LIVE", "FAILED"],
+  LIVE: ["IDLE", "ROLLED_BACK"],
+  FAILED: ["IDLE"],
+  ROLLED_BACK: ["IDLE"],
+};
+export class ForgeLoop {
+  readonly store: ForgeStore;
+  running = false;
+  preset: "demo" | "normal" = "demo";
+  round: ForgeRound | null = null;
+  build: ForgeRound | null = null;
+  notice = "Forge ready";
+  activity: string[] = [];
+  private timer?: NodeJS.Timeout;
+  private curating = false;
+  private building = false;
+  private curationAbort?: AbortController;
+  private buildAbort?: AbortController;
+  private finishedAt = 0;
+  private buildStartedAt = 0;
+  private tasks = new Set<Promise<void>>();
+  private now: () => number;
+  constructor(
+    readonly inbox: IdeaInbox,
+    private options: ForgeOptions,
+  ) {
+    this.store = new ForgeStore(inbox.db);
+    this.now = options.now ?? Date.now;
+    // Interrupted AI/build work is never silently deployed or billed again on restart.
+    for (const round of this.store.latestRounds()) {
+      if (
+        ["BUILDING", "TESTING", "DEPLOYING", "CURATING"].includes(round.stage)
+      ) {
+        round.stage = "FAILED";
+        round.deadline = null;
+        this.store.save(round, this.now());
+        this.inbox.db
+          .prepare(
+            "UPDATE builds SET status='FAILED' WHERE roundId=? AND status IN ('BUILDING','TESTING','DEPLOYING')",
+          )
+          .run(round.id);
+        this.notice =
+          "Interrupted work stopped safely; live checkpoint restored";
+        this.build ??= round;
+      } else if (
+        ["COLLECTING", "VOTING", "STREAMER_APPROVAL"].includes(round.stage) &&
+        !this.round
+      )
+        this.round = round;
+      else this.build ??= round;
+    }
+  }
+  private track(task: Promise<void>): void {
+    this.tasks.add(task);
+    void task.finally(() => this.tasks.delete(task));
+  }
+  view(): ForgeView {
+    return {
+      type: "forge",
+      running: this.running,
+      preset: this.preset,
+      season: this.store.season,
+      round: this.round,
+      build: this.build
+        ? {
+            ...this.build,
+            durationMs: this.building
+              ? this.now() - this.buildStartedAt
+              : this.build.durationMs,
+          }
+        : null,
+      ideaCount: this.inbox.pendingCount(),
+      activity: [...this.activity],
+      notice: this.notice,
+      mods: this.store.mods(),
+      usage: {
+        ...this.store.usage(this.now()),
+        cap: this.options.buildCap ?? 12,
+      },
+      now: this.now(),
+    };
+  }
+  publish(): void {
+    this.options.broadcast(this.view());
+  }
+  private stage(
+    round: ForgeRound,
+    next: ForgeStage,
+    deadline: number | null = null,
+  ): void {
+    if (!transitions[round.stage].includes(next))
+      throw Error(`Invalid forge transition ${round.stage} -> ${next}`);
+    round.stage = next;
+    round.deadline = deadline;
+    this.store.save(round, this.now());
+    this.publish();
+  }
+  private line = (text: string): void => {
+    this.activity.push(sanitize(text, 180));
+    if (this.activity.length > 40) this.activity.shift();
+    this.publish();
+  };
+  start(preset: "demo" | "normal"): void {
+    this.preset = preset;
+    this.running = true;
+    if (
+      !this.round ||
+      ["FAILED", "IDLE", "LIVE", "ROLLED_BACK"].includes(this.round.stage)
+    )
+      this.collect();
+    this.timer ??= setInterval(() => this.pulse(), 250);
+    this.publish();
+  }
+  private collect(): void {
+    this.round = this.store.createRound(this.now());
+    this.options.resetRound();
+    this.stage(
+      this.round,
+      "COLLECTING",
+      this.now() + presets[this.preset].collect,
+    );
+    this.options.announce(
+      "Forge open! !idea <a creature, spell or game twist>",
+    );
+  }
+  pulse(): void {
+    if (!this.running) return;
+    if (
+      this.build?.stage === "LIVE" &&
+      this.finishedAt &&
+      this.now() - this.finishedAt >= 5000
+    )
+      this.stage(this.build, "IDLE");
+    const round = this.round;
+    if (!round) {
+      if (!this.building && this.options.autoCollect !== false) this.collect();
+      return;
+    }
+    if (
+      round.stage === "COLLECTING" &&
+      this.now() >= round.deadline! &&
+      !this.curating
+    )
+      this.track(this.curate(round));
+    else if (round.stage === "VOTING" && this.now() >= round.deadline!) {
+      round.winner = round.tallies.indexOf(Math.max(...round.tallies));
+      const delay = presets[this.preset].approval;
+      this.stage(
+        round,
+        "STREAMER_APPROVAL",
+        delay === null ? null : this.now() + delay,
+      );
+      this.options.announce(
+        `Winner: ${round.cards[round.winner]!.title}. Awaiting streamer approval.`,
+      );
+    } else if (
+      round.stage === "STREAMER_APPROVAL" &&
+      round.deadline !== null &&
+      this.now() >= round.deadline &&
+      !this.building
+    )
+      this.approve();
+    this.publish();
+  }
+  private async curate(round: ForgeRound): Promise<void> {
+    this.curating = true;
+    this.curationAbort = new AbortController();
+    this.stage(round, "CURATING");
+    const ideas = this.inbox.pending();
+    round.ideaIds = ideas.map((i) => i.id);
+    try {
+      const result = await this.options.producer.curate(
+        ideas,
+        [
+          ...Object.keys(
+            (await this.options.simulation.checkpoint()).world.mods,
+          ),
+          ...this.store.summaries(),
+        ],
+        AbortSignal.any([
+          this.curationAbort.signal,
+          AbortSignal.timeout(90000),
+        ]),
+      );
+      this.curationAbort.signal.throwIfAborted();
+      for (const idea of ideas) {
+        this.inbox.mark(
+          idea.id,
+          result.rejected.includes(idea.id) ? "rejected" : "accepted",
+        );
+      }
+      if (result.rejected.length) this.options.announce(worldOnlyReason);
+      this.store.addTokens(result.tokens);
+      round.cards = result.cards;
+      this.stage(round, "VOTING", this.now() + presets[this.preset].vote);
+      for (const [i, card] of round.cards.entries())
+        this.options.announce(
+          `${i + 1}. ${card.title}: ${card.pitch}${card.suggestion ? " [Forge suggestion]" : ""}`,
+        );
+      this.options.announce(
+        "Voting open! !vote 1, !vote 2 or !vote 3. Your last vote counts.",
+      );
+    } catch (error) {
+      this.fail(round, error, "Curation failed");
+    } finally {
+      this.curating = false;
+    }
+  }
+  vote(chat: Pick<Chat, "source" | "userId">, choice: number): boolean {
+    if (
+      !this.running ||
+      this.round?.stage !== "VOTING" ||
+      this.now() >= this.round.deadline! ||
+      ![1, 2, 3].includes(choice)
+    )
+      return false;
+    this.round.tallies = this.store.vote(
+      this.round.id,
+      `${chat.source}:${chat.userId}`,
+      choice,
+    );
+    this.store.save(this.round, this.now(), false);
+    this.publish();
+    return true;
+  }
+  approve(): void {
+    const round = this.round;
+    if (!this.running || round?.stage !== "STREAMER_APPROVAL" || this.building)
+      throw Error("No approved build slot available");
+    if (
+      this.store.usage(this.now()).buildsThisHour >=
+      (this.options.buildCap ?? 12)
+    ) {
+      this.notice = "Hourly build cap reached";
+      round.deadline = null;
+      this.store.save(round, this.now(), false);
+      this.publish();
+      return;
+    }
+    this.build = round;
+    this.round = null;
+    this.building = true;
+    this.track(this.buildRound(round));
+    if (this.running && this.options.autoCollect !== false) this.collect();
+  }
+  veto(): void {
+    if (!this.round || this.round.stage !== "STREAMER_APPROVAL")
+      throw Error("No card awaiting approval");
+    this.fail(this.round, Error("Streamer veto"), "Card vetoed");
+    if (this.running) this.collect();
+  }
+  cancel(): void {
+    this.buildAbort?.abort();
+    this.notice = "Build cancellation requested";
+    this.publish();
+  }
+  stop(): void {
+    this.running = false;
+    clearInterval(this.timer);
+    this.timer = undefined;
+    this.curationAbort?.abort();
+    this.buildAbort?.abort();
+    if (
+      this.round &&
+      ["COLLECTING", "VOTING", "STREAMER_APPROVAL"].includes(this.round.stage)
+    )
+      this.stage(this.round, "FAILED");
+    this.notice = "Forge stopped";
+    this.publish();
+  }
+  private fail(round: ForgeRound, error: unknown, label: string): void {
+    this.options.diagnostic?.(error);
+    if (!["FAILED", "ROLLED_BACK", "IDLE"].includes(round.stage))
+      this.stage(round, "FAILED");
+    // Only locally authored diagnostics, never raw provider payloads, enter the HUD.
+    this.notice = label;
+    this.line(
+      error instanceof Error &&
+        (error.name === "AbortError" || error.name === "TimeoutError")
+        ? "Work cancelled or timed out; last good game stays live"
+        : `${label}; last good game stays live. Check model/login and Gatekeeper report.`,
+    );
+  }
+  private async buildRound(round: ForgeRound): Promise<void> {
+    const started = this.now(),
+      buildId = this.store.beginBuild(round.id, started);
+    this.buildStartedAt = started;
+    this.buildAbort = new AbortController();
+    const signal = AbortSignal.any([
+      this.buildAbort.signal,
+      AbortSignal.timeout(this.options.buildTimeoutMs ?? 240000),
+    ]);
+    round.modId = `forge-${this.store.season}-${round.id}`;
+    this.stage(round, "BUILDING");
+    let deployed = false;
+    try {
+      const card = round.cards[round.winner!]!;
+      let source = "";
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        round.attempts = attempt;
+        this.store.saveBuild(buildId, round);
+        const checkpoint = await this.options.simulation.checkpoint();
+        const result = await this.options.builder.build({
+          modId: round.modId,
+          card,
+          checkpoint: checkpoint.world,
+          ...(round.report ? { report: round.report } : {}),
+          signal,
+          activity: this.line,
+        });
+        source = result.source;
+        this.store.addTokens(result.tokens);
+        signal.throwIfAborted();
+        this.stage(round, "TESTING");
+        // Refresh at test time: live state can advance while the Builder is running.
+        const current = await this.options.simulation.checkpoint();
+        round.report = await this.options.gate(
+          {
+            modId: round.modId,
+            source,
+            checkpoint: current.world,
+            commands: card.commands,
+          },
+          signal,
+        );
+        round.durationMs = this.now() - started;
+        this.store.saveBuild(buildId, round);
+        this.store.save(round, this.now(), false);
+        this.line(
+          `Gatekeeper: ${round.report.ok ? "PASS" : "FAIL"}; attempt ${attempt}; ${round.report.ticks} ticks`,
+        );
+        if (round.report.ok) break;
+        if (attempt < 3) this.stage(round, "BUILDING");
+      }
+      if (!round.report?.ok)
+        throw Error("Gatekeeper rejected candidate after three attempts");
+      signal.throwIfAborted();
+      this.stage(round, "DEPLOYING");
+      await this.options.simulation.deploy(round.modId, source);
+      deployed = true;
+      signal.throwIfAborted();
+      const live = await this.options.simulation.checkpoint();
+      signal.throwIfAborted();
+      this.store.deploy(round, source, this.now());
+      this.store.checkpoint(live);
+      this.stage(round, "LIVE");
+      const credits =
+        card.credits
+          .map((c) => `${c.source === "simulator" ? "[SIM] " : ""}@${c.name}`)
+          .join(" ") || "Forge suggestion";
+      this.notice = `Shipped: ${card.title} - ${credits}`;
+      await this.options.simulation
+        .celebrate(this.notice)
+        .catch(() => this.line("Mod is live; celebration display unavailable"));
+      this.options.announce(
+        `${this.notice}${card.commands.length ? `. Try ${card.commands.join(" ")}` : ""}`,
+      );
+      this.publish();
+    } catch (error) {
+      if (deployed && round.stage !== "LIVE") {
+        const current = await this.options.simulation.checkpoint();
+        this.acceptCheckpoint(
+          current.world.mods[round.modId]
+            ? await this.options.simulation.rollback(round.modId)
+            : current,
+        );
+      }
+      this.fail(
+        round,
+        error,
+        signal.aborted ? "Build cancelled or timed out" : "Build failed",
+      );
+    } finally {
+      round.durationMs = this.now() - started;
+      this.finishedAt = this.now();
+      this.store.saveBuild(buildId, round);
+      this.store.save(round, this.now(), false);
+      this.building = false;
+      this.publish();
+    }
+  }
+  async rollback(id?: string): Promise<void> {
+    this.cancel();
+    this.acceptCheckpoint(await this.options.simulation.rollback(id), true);
+  }
+  async safeMode(): Promise<void> {
+    this.stop();
+    this.acceptCheckpoint(await this.options.simulation.safeMode(), true);
+    this.notice = "SAFE MODE: generated mods disabled";
+    this.publish();
+  }
+  acceptCheckpoint(checkpoint: HostCheckpoint, rollback = false): void {
+    this.store.checkpoint(checkpoint);
+    this.store.reconcile(Object.keys(checkpoint.world.mods));
+    if (rollback) {
+      if (this.build && ["LIVE", "IDLE"].includes(this.build.stage)) {
+        this.build.stage = "ROLLED_BACK";
+        this.store.save(this.build, this.now());
+      }
+      this.notice = "ROLLED BACK - restored previous game checkpoint";
+    }
+    this.publish();
+  }
+  async settled(): Promise<void> {
+    await Promise.all([...this.tasks]);
+  }
+  async close(): Promise<void> {
+    this.stop();
+    await this.settled();
+  }
+}

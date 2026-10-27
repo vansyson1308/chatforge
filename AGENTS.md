@@ -6,8 +6,8 @@
 
 - M0 Harness: complete.
 - M1 Engine, sandbox, seed game and Mod API: complete; lead QC approved.
-- M2 Twitch and Crowd Sim: complete (current delivered implementation milestone). Human OAuth/live-channel verification is the hand-off in `docs/LIVE_TEST.md`.
-- M3 Forge loop, AI, Gatekeeper and persistence.
+- M2 Twitch and Crowd Sim: complete; lead QC approved after a real Twitch live test on vansyson1308 (all seven subscriptions and real chat delivery verified).
+- M3 Forge loop, AI, Gatekeeper and persistence: current milestone; implementation and two real dry runs delivered, final verification recorded in CODEX_JOURNEY.md.
 - M4 Overlay HUD, dashboard and game polish.
 - M5 Hardening, simulated-stream end-to-end test and performance.
 - M6 Demo kit.
@@ -30,7 +30,9 @@ Target Windows 11, PowerShell, Node 24 and pnpm 10. Never write bash-only script
 - End-to-end: `pnpm test:e2e` (explicitly unavailable until M5)
 - Format: `pnpm format`
 - Feasibility: `pnpm smoke:codex` and `pnpm smoke:openai`
+- Real Forge dry run: `pnpm forge:dry-run 1` (or `2`); uses paid Producer API and the machine's Codex login, never Twitch. Saves source/report under `docs/media/sample-mods/`.
 - M2 hand-off smoke: `node scripts/verify-twitch-handoff.mjs` (requires built server; checks OAuth redirect without following it, never sends chat)
+- M3 browser smoke: `node scripts/verify-forge-handoff.mjs` (requires build; starts/stops its own isolated server and Chrome; no Twitch/AI calls)
 
 ## Definition of done
 
@@ -43,4 +45,6 @@ For every task: typecheck, lint and tests green; update relevant docs; append an
 - OAuth tokens belong only in ignored `runtime/secrets/twitch.json`; never log upstream token/error bodies. Only the human completes Twitch login or clicks the real-chat test button.
 - Simulated viewers/events must carry visible SIM provenance. Simulator replies never enter the Twitch outbound queue.
 - Mods run only inside the QuickJS sandbox, never in the Node or browser host realm.
+- Viewer ideas and model output are untrusted data. Generated mods require the deterministic Gatekeeper; do not bypass it or weaken Builder sandbox/network limits. Local `.env` credentials take precedence over credentials inherited from a parent tool; never print either.
+- M4 owns pacing: lead observed an idle, full-health keep at wave 12. Do not change combat pacing in M3.
 - Stop every dev server or background process you start before finishing. Remove temporary files. Disk space is scarce: never leave large caches or artifacts behind.

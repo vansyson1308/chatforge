@@ -1,5 +1,31 @@
 # Mod API v1 — authoring contract
 
+## M3 admission contract
+
+Generated mods also export literal `forgeTest` data. The source must fit 24 KiB UTF-8 and have only the direct named exports `register` and `forgeTest`. Top-level statements are declarations only. Do not use imports, dynamic computed properties, constructors/prototypes, globals or async; use `for...of` for array access. The three seed examples remain handwritten Mod API examples and are not generated-mod admission fixtures.
+
+```js
+export const forgeTest = {
+  commands: ["!spark"],
+  events: ["twitch:cheer"],
+  expect: { fx: ["particles", "banner"], minEffects: 2 },
+};
+export function register(api) {
+  const spark = () => {
+    api.fx.particles(600, 200, "#ffd66b", 12);
+    api.fx.banner("A spark from chat!");
+  };
+  api.registerCommand("!spark", spark, { cooldownSec: 1 });
+  api.on("twitch:cheer", spark);
+}
+```
+
+`commands` is optional (up to six command names); `events` optionally lists wave_start, wave_end or twitch:sub/cheer/raid/follow (up to eight). `expect` is required: optional `spawnKinds` (up to eight owned kinds), `fx` (up to eight FX types), `rules` (rule-name/finite-number map) and `minEffects` (1..10000, defaults to 1). The test object must contain literal JSON-like values, not executable expressions. No extra fields are accepted.
+
+Gatekeeper starts from the current live checkpoint and mod set, adds eight scripted viewers, and drives all Twitch/wave events and card/test commands during 900 ticks. It repeats from the same checkpoint and compares hashes. Card commands must actually be registered by the candidate. Expected spawns/FX must belong to the candidate; rule expectations must be candidate writes that change the baseline value. Empty banners, zero-count particles and zero-strength effects do not count. A no-op always fails even without explicit expectations. In the Builder workspace run `node forge-test.mjs mods/<modId>.js`; production reruns independently before deploy.
+
+These assertions prove observable effects and simulation safety, not arbitrary English semantics. Choose expectations that reflect the card's visual promise. State, timer phases and pending schedules must remain deterministic after checkpoint restore; a delayed closure is not persistent state.
+
 Write a single ES module exporting `register(api)`. It runs in a separate QuickJS runtime, never in Node or the browser. No imports, network, filesystem, DOM, process, wall clock, `eval`, dynamic function constructors, async functions, Promises or native timers. Use synchronous callbacks, `api.random()` and simulation ticks (30 ticks = 1 second).
 
 ## Declaration and persistence rules — read before writing a mod

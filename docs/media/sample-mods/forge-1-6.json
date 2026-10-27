@@ -1,0 +1,127 @@
+{
+  "title": "Cheer Sparks",
+  "card": {
+    "title": "Cheer Sparks",
+    "pitch": "Cheers launch orange sparks and a gentle, harmless screen shake.",
+    "visualHook": "A brief burst of orange particles accompanies the shake.",
+    "acceptance": [
+      "A simulated cheer within 900 ticks produces orange particles and a brief shake.",
+      "The effect causes no gameplay damage or stat changes."
+    ],
+    "commands": [],
+    "credits": [
+      {
+        "id": "sim-3",
+        "name": "星の鍛冶屋",
+        "source": "simulator"
+      },
+      {
+        "id": "sim-4",
+        "name": "DuckKnight",
+        "source": "simulator"
+      },
+      {
+        "id": "sim-2",
+        "name": "MưaNhỏ",
+        "source": "simulator"
+      }
+    ],
+    "feasibility": "Use twitch:cheer with fx.particles and fx.shake.",
+    "risk": "Low; keep the shake mild and rate-limit repeated effects.",
+    "suggestion": false
+  },
+  "threadId": "01a17ccb-ee60-7711-9210-545ce1ebd805",
+  "attempts": 1,
+  "timeline": [
+    {
+      "round": 6,
+      "stage": "COLLECTING",
+      "seconds": 0.17
+    },
+    {
+      "round": 5,
+      "stage": "FAILED",
+      "seconds": 0.18
+    },
+    {
+      "round": 6,
+      "stage": "CURATING",
+      "seconds": 0.2
+    },
+    {
+      "round": 6,
+      "stage": "VOTING",
+      "seconds": 15.4
+    },
+    {
+      "round": 6,
+      "stage": "STREAMER_APPROVAL",
+      "seconds": 15.53
+    },
+    {
+      "round": 6,
+      "stage": "BUILDING",
+      "seconds": 15.61
+    },
+    {
+      "round": 7,
+      "stage": "COLLECTING",
+      "seconds": 15.67
+    },
+    {
+      "round": 7,
+      "stage": "CURATING",
+      "seconds": 60.91
+    },
+    {
+      "round": 7,
+      "stage": "VOTING",
+      "seconds": 69.48
+    },
+    {
+      "round": 6,
+      "stage": "TESTING",
+      "seconds": 72.19
+    },
+    {
+      "round": 6,
+      "stage": "DEPLOYING",
+      "seconds": 73.57
+    },
+    {
+      "round": 6,
+      "stage": "LIVE",
+      "seconds": 73.74
+    }
+  ],
+  "report": {
+    "ok": true,
+    "checks": [
+      {
+        "name": "static contract",
+        "ok": true,
+        "detail": "24 KiB / restricted AST / literal contract"
+      },
+      {
+        "name": "simulation 1",
+        "ok": true,
+        "detail": "900 ticks; 12 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "simulation 2",
+        "ok": true,
+        "detail": "900 ticks; 12 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "determinism",
+        "ok": true,
+        "detail": "6a9108b8"
+      }
+    ],
+    "hashes": ["6a9108b8", "6a9108b8"],
+    "ticks": 1800,
+    "durationMs": 1162,
+    "effects": 12
+  },
+  "durationSeconds": 73.8346223
+}

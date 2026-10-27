@@ -206,7 +206,7 @@ describe("Crowd Sim and outbound isolation", () => {
     await out.tick();
     expect(send).toHaveBeenCalledTimes(2);
     expect(Array.from(send.mock.calls[1]![0] as string)).toHaveLength(500);
-    expect(send.mock.calls[0]![0]).toBe("? Hello");
+    expect(send.mock.calls[0]![0]).toBe("\u2692 Hello");
     now = 60000;
     expect(out.enqueue("Hello", "twitch")).toBe(true);
     send.mockRejectedValueOnce(new TwitchError(429, 40000));

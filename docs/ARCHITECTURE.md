@@ -1,5 +1,31 @@
 # Architecture
 
+## M3 delivered Forge loop
+
+M2 passed a real Twitch live test on `vansyson1308`, including all seven subscriptions and chat delivery. M3 preserves the seven-package architecture. See [FORGE_LOOP.md](FORGE_LOOP.md) for controls, persistence and real dry-run evidence.
+
+```mermaid
+flowchart LR
+  Inbox[(SQLite ideas)] --> Rules[Rules + OpenAI moderation]
+  Rules --> Producer[Idea groups / Responses cards]
+  Producer --> Vote[Source-scoped last vote wins]
+  Vote --> Approval[Streamer / demo timer]
+  Approval --> Builder[Codex SDK / one thread per season]
+  Builder --> CLI[Local forge-test CLI]
+  Builder --> Gate[Independent Gatekeeper worker]
+  Gate --> Deploy[Checkpoint and hot-load]
+  Deploy --> Live[Live QuickJS simulation]
+  Live --> Rollback[Rollback / Safe Mode]
+  Live --> DB[(World + rollback history + mod versions)]
+  DB --> Restore[Restart restore]
+  Gate --> HUD[Read-only Forge WS HUD]
+  Deploy --> HUD
+```
+
+Separate collecting/building round records allow collection during a build with one build slot. Every transition is persisted before broadcast. Demo uses 45/30/10 seconds; Normal uses 90/45/manual approval. SQLite stores seasons, rounds/transitions, cards, votes, builds/reports/thread IDs, mod versions and contributors. The worker publishes a complete checkpoint including rollback history every 300 ticks. Startup restores it and marks interrupted AI work failed rather than silently billing or deploying. Patch notes derive from persisted shipped cards and credits.
+
+Part A fixes: cross-site Fetch Metadata exceptions apply only to top-level GET document navigations for static pages/OAuth; APIs, mutations and WS stay strict. Outbound prefix `\u2692` is verified as UTF-8 E2 9A 92. Simulator RNG checkpoints and a partial SQLite unique index on pending normalized source/user/text prevent replay duplicates across toggles/restarts. Migration retains historical duplicates as rejected rows.
+
 The decided architecture is specified in [the brief](../brief/CHATFORGE_BRIEF.md), especially §3. It is the source of truth; this document summarizes it.
 
 TypeScript, Node 24, ESM, strict TypeScript and pnpm workspaces span seven packages:

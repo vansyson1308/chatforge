@@ -1,6 +1,6 @@
 import { parentPort } from "node:worker_threads";
 import { World } from "../../../packages/engine/src/index.js";
-import { ModHost } from "./mod-host.js";
+import { ModHost, type HostCheckpoint } from "./mod-host.js";
 import type { RenderSnapshot } from "../../../packages/shared/src/protocol.js";
 
 if (!parentPort) throw new Error("Simulation must run in a worker thread");
@@ -11,12 +11,18 @@ let pending = Promise.resolve();
 let busy = false;
 const send = () => {
   const fx = world.drainFx();
-  for (const diagnostic of host.drainDiagnostics())
+  for (const diagnostic of host.drainDiagnostics()) {
+    port.postMessage({
+      type: "rollback",
+      modId: diagnostic.modId,
+      checkpoint: host.exportCheckpoint(),
+    });
     fx.push({
       type: "banner",
       text: `ROLLED BACK: ${diagnostic.modId}`,
       modId: diagnostic.modId,
     });
+  }
   const message: RenderSnapshot = {
     type: "snapshot",
     tick: world.state.tick,
@@ -44,6 +50,11 @@ const send = () => {
 const timer = setInterval(() => {
   if (busy) return;
   host.tick();
+  if (world.state.tick % 300 === 0)
+    port.postMessage({
+      type: "checkpoint",
+      checkpoint: host.exportCheckpoint(),
+    });
 }, 1000 / 30);
 const broadcastTimer = setInterval(send, 1000 / 20);
 
@@ -53,7 +64,39 @@ port.on(
     pending = pending.then(async () => {
       busy = true;
       try {
+        let result: unknown;
         switch (message.type) {
+          case "checkpoint":
+            result = host.exportCheckpoint();
+            break;
+          case "restore":
+            host.importCheckpoint(message.checkpoint as HostCheckpoint);
+            break;
+          case "baseline":
+            host.markBaseline();
+            break;
+          case "rollback":
+            host.rollback(
+              typeof message.modId === "string" ? message.modId : undefined,
+            );
+            result = host.exportCheckpoint();
+            break;
+          case "safe-mode":
+            host.safeMode();
+            result = host.exportCheckpoint();
+            break;
+          case "celebrate":
+            world.state.fx.push(
+              { type: "banner", text: String(message.text).slice(0, 120) },
+              {
+                type: "particles",
+                x: 600,
+                y: 160,
+                color: "#ffd66b",
+                count: 80,
+              },
+            );
+            break;
           case "populate": {
             const count = Number(message.count);
             if (!Number.isInteger(count) || count < 1 || count > 300)
@@ -110,7 +153,7 @@ port.on(
             throw new Error("Unknown simulation command");
         }
         if (message.type !== "stop") send();
-        port.postMessage({ type: "result", id: message.id, ok: true });
+        port.postMessage({ type: "result", id: message.id, ok: true, result });
       } catch (error) {
         port.postMessage({
           type: "result",

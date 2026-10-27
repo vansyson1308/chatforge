@@ -67,6 +67,11 @@ export interface ModDiagnostic {
   stack?: string;
   rollbackVersion: number;
 }
+export interface HostCheckpoint {
+  world: WorldState;
+  deployments: { id: string; source: string; before: WorldState }[];
+  baseline: WorldState;
+}
 
 /** A transaction contains validated host commands, never a copy of the world. */
 export class ModHost {
@@ -78,19 +83,54 @@ export class ModHost {
   private cpu = new Map<string, number>();
   private deployments: { id: string; source: string; before: WorldState }[] =
     [];
-  private readonly safeBaseline: WorldState;
+  private safeBaseline: WorldState;
   private lastGood?: WorldState;
   readonly diagnostics: ModDiagnostic[] = [];
   private notices: ModDiagnostic[] = [];
   private epoch = 0;
+  readonly observedRules = new Map<string, Map<string, number>>();
   constructor(readonly world: World) {
     this.safeBaseline = world.snapshot();
   }
   sprites(): Record<string, PixelSprite> {
     return this.spritesByName;
   }
+  commands(id: string): string[] {
+    return Object.keys(this.mods.get(id)?.declarations.commands ?? {});
+  }
   checkpoint(): WorldState {
     return this.world.snapshot();
+  }
+  exportCheckpoint(): HostCheckpoint {
+    return structuredClone({
+      world: this.checkpoint(),
+      deployments: this.deployments,
+      baseline: this.safeBaseline,
+    });
+  }
+  importCheckpoint(checkpoint: HostCheckpoint): void {
+    this.restore(checkpoint.world);
+    this.deployments = structuredClone(checkpoint.deployments);
+    this.safeBaseline = structuredClone(checkpoint.baseline);
+    this.lastGood = this.checkpoint();
+  }
+  markBaseline(): void {
+    this.safeBaseline = this.checkpoint();
+    this.deployments = [];
+  }
+  rollback(id?: string): void {
+    const index = id
+      ? this.deployments.findIndex((d) => d.id === id)
+      : this.deployments.length - 1;
+    if (index < 0) throw Error("No generated deployment to roll back");
+    this.restore(this.deployments[index]!.before);
+    this.deployments = this.deployments.slice(0, index);
+    this.lastGood = this.checkpoint();
+  }
+  safeMode(): void {
+    this.restore(this.safeBaseline);
+    this.deployments = [];
+    this.lastGood = this.checkpoint();
   }
   persistenceCheckpoint(): WorldState | undefined {
     return this.lastGood;
@@ -215,7 +255,13 @@ export class ModHost {
       const bounds = RULE_BOUNDS[key],
         value = finite(args[1], bounds.min, bounds.max);
       this.append(() => {
+        const changed = this.world.state.rules[key] !== value;
         this.world.state.rules[key] = value;
+        if (!changed) return;
+        const observed =
+          this.observedRules.get(id) ?? new Map<string, number>();
+        observed.set(key, value);
+        this.observedRules.set(id, observed);
       });
       return value;
     }

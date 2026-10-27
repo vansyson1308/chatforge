@@ -5,6 +5,71 @@
   background: #101820;
   color: #e5e9ed;
 }
+.forge-panel {
+  border-top: 3px solid #e8a35f;
+}
+.forge-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.forge-cards article {
+  padding: 16px;
+  background: #101820;
+  border: 1px solid #34414d;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.forge-cards .winner {
+  border-color: #e8a35f;
+}
+.forge-cards h4 {
+  font-size: 18px;
+  margin: 12px 0;
+}
+.forge-build {
+  margin: 24px 0;
+  padding: 20px;
+  background: #101820;
+}
+.forge-activity {
+  max-height: 180px;
+  overflow: auto;
+  font-family: monospace;
+  line-height: 1.8;
+}
+.gate-report {
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.forge-mods {
+  list-style: none;
+  padding: 0;
+}
+.forge-mods li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #34414d;
+}
+.danger {
+  background: #ed957e;
+}
+summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+@media (max-width: 850px) {
+  .forge-cards {
+    grid-template-columns: 1fr;
+  }
+  .forge-mods li {
+    flex-wrap: wrap;
+  }
+}
 body {
   margin: 0;
 }

@@ -5,6 +5,7 @@ import {
   type DashboardState,
 } from "../../../packages/shared/src/chat.js";
 import "./style.css";
+import { ForgePanel } from "./forge-panel.js";
 
 const base =
   location.port === "5174"
@@ -74,12 +75,13 @@ function Dashboard() {
       <header>
         <p className="eyebrow">CHATFORGE / STREAMER DESK</p>
         <h1>Open the forge.</h1>
-        <p>M2 · Twitch & Crowd Sim. Forge rounds arrive in M3.</p>
+        <p>Your chat imagines it. Codex builds it. The game changes live.</p>
         <a href={`${base}/overlay/`} target="_blank" rel="noreferrer">
           Open overlay ↗
         </a>
       </header>
       <p role="status">{error || notice}</p>
+      <ForgePanel base={base} />
       {!state ? (
         <p>Connecting to local server…</p>
       ) : (
@@ -242,8 +244,7 @@ function Dashboard() {
                 ))}
               </ol>
               <p>
-                {state.votes.length} preview votes recorded. No active voting
-                round in M2.
+                {state.votes.length} viewers voted this round. Last vote wins.
               </p>
             </section>
           </div>

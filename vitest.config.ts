@@ -3,6 +3,11 @@ export default defineConfig({
   test: {
     fileParallelism: false,
     maxWorkers: 1,
-    exclude: ["**/node_modules/**", "**/dist/**", "**/*.perf.test.ts"],
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "runtime/**",
+      "**/*.perf.test.ts",
+    ],
   },
 });

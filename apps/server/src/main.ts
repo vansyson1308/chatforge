@@ -8,11 +8,21 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { randomBytes } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
-import { config } from "dotenv";
+import { loadEnvironment } from "./environment.js";
 import { Audience } from "./audience.js";
-import { localRequest, localOrigins } from "./local-http.js";
+import {
+  localRequest,
+  localOrigins,
+  documentNavigation,
+} from "./local-http.js";
+import { ForgeLoop } from "./forge-loop.js";
+import { ForgeStore } from "./forge-store.js";
+import { WorkspaceBuilder } from "./builder.js";
+import { openAIProducer } from "./producer.js";
+import { runGate } from "./gate-runner.js";
+import type { HostCheckpoint } from "./mod-host.js";
 
-config({ path: resolve(process.cwd(), "../../.env"), quiet: true });
+loadEnvironment(resolve(process.cwd(), "../../.env"));
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new Error("Invalid PORT");
@@ -28,6 +38,7 @@ const requests = new Map<
 let sequence = 0;
 let lastSnapshot: string | undefined;
 let stopping = false;
+let simulationReady = false;
 const exampleDirectory = resolve(process.cwd(), "examples");
 const runtimeDirectory = resolve(process.cwd(), "../../runtime/mods");
 async function readMod(id: string): Promise<string> {
@@ -86,23 +97,60 @@ function body(req: IncomingMessage): Promise<unknown> {
 }
 const root = resolve(process.cwd(), "../..");
 const audience = await Audience.create(root, process.env, sendCommand);
+const forgeStore = new ForgeStore(audience.inbox.db);
+const checkpoint = () =>
+  sendCommand({ type: "checkpoint" }) as Promise<HostCheckpoint>;
+const forge = new ForgeLoop(audience.inbox, {
+  producer: {
+    curate: (...args) => openAIProducer(process.env).curate(...args),
+  },
+  builder: new WorkspaceBuilder(root, process.env, {
+    get: () => forgeStore.threadId,
+    set: (id) => {
+      forgeStore.threadId = id;
+    },
+  }),
+  simulation: {
+    checkpoint,
+    deploy: async (modId, source) => {
+      await sendCommand({ type: "load", modId, source });
+    },
+    rollback: (modId) =>
+      sendCommand({ type: "rollback", modId }) as Promise<HostCheckpoint>,
+    safeMode: () =>
+      sendCommand({ type: "safe-mode" }) as Promise<HostCheckpoint>,
+    celebrate: async (text) => {
+      await sendCommand({ type: "celebrate", text });
+    },
+  },
+  gate: runGate,
+  broadcast: (view) => {
+    const data = JSON.stringify(view);
+    for (const client of sockets.clients)
+      if (
+        client.readyState === WebSocket.OPEN &&
+        client.bufferedAmount < 1000000
+      )
+        client.send(data);
+  },
+  announce: (text) => audience.announce(text),
+  resetRound: () => audience.router.resetRound(),
+  buildTimeoutMs: Number(process.env.BUILD_TIMEOUT_MS ?? 240000),
+  buildCap: Number(process.env.BUILDS_PER_HOUR ?? 12),
+});
+audience.router.onVote = (chat, choice) => forge.vote(chat, choice);
+audience.router.forgeStatus = () =>
+  `ChatForge: ${forge.build?.stage ?? forge.round?.stage ?? "IDLE"}. ${forge.notice}`;
 const server = createServer(async (req, res) => {
+  if (stopping) {
+    json(res, 503, { error: "Server stopping" });
+    return;
+  }
   // OAuth navigation crosses hosts; state + browser cookie secure the callback.
   const url = new URL(req.url ?? "/", `http://localhost:${port}`);
   const isCallback =
     url.pathname === "/auth/twitch/callback" && req.method === "GET";
-  const isOAuthNavigation =
-    req.method === "GET" &&
-    ["/auth/twitch/login", "/auth/twitch/callback"].includes(url.pathname) &&
-    (!req.headers["sec-fetch-mode"] ||
-      req.headers["sec-fetch-mode"] === "navigate");
-  const check = isOAuthNavigation
-    ? {
-        headers: { ...req.headers, "sec-fetch-site": undefined },
-        socket: req.socket,
-      }
-    : req;
-  if (!localRequest(check, port)) {
+  if (!localRequest(req, port, false, documentNavigation(req))) {
     json(res, 403, { error: "Local access only" });
     return;
   }
@@ -162,12 +210,69 @@ const server = createServer(async (req, res) => {
       json(res, 200, audience.status());
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/forge") {
+      json(res, 200, forge.view());
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/forge/patch-notes") {
+      res.writeHead(200, {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Content-Disposition":
+          'attachment; filename="chatforge-patch-notes.md"',
+      });
+      res.end(forge.store.patchNotes());
+      return;
+    }
     if (url.pathname.startsWith("/api/")) {
       if (req.method !== "POST" || !localRequest(req, port, true)) {
         json(res, 403, { error: "Forbidden" });
         return;
       }
-      if (url.pathname === "/api/config") {
+      if (url.pathname.startsWith("/api/forge/")) {
+        if (!simulationReady) {
+          json(res, 503, { error: "Simulation starting" });
+          return;
+        }
+        const input = (await body(req)) as {
+          preset?: unknown;
+          modId?: unknown;
+        };
+        switch (url.pathname.slice("/api/forge/".length)) {
+          case "start":
+            if (input.preset !== "demo" && input.preset !== "normal")
+              throw Error("Invalid preset");
+            forge.start(input.preset);
+            break;
+          case "stop":
+            forge.stop();
+            break;
+          case "approve":
+            forge.approve();
+            break;
+          case "veto":
+            forge.veto();
+            break;
+          case "cancel":
+            forge.cancel();
+            break;
+          case "rollback":
+            if (
+              input.modId !== undefined &&
+              (typeof input.modId !== "string" ||
+                !forge.store.mods().some((m) => m.id === input.modId))
+            )
+              throw Error("Unknown generated mod");
+            await forge.rollback(input.modId as string | undefined);
+            break;
+          case "safe-mode":
+            await forge.safeMode();
+            break;
+          default:
+            json(res, 404, { error: "Not found" });
+            return;
+        }
+        json(res, 200, forge.view());
+      } else if (url.pathname === "/api/config") {
         audience.configure(await body(req));
         json(res, 200, { ok: true });
       } else if (url.pathname === "/api/chat/test")
@@ -284,11 +389,19 @@ const sockets = new WebSocketServer({
 });
 sockets.on("connection", (socket) => {
   if (lastSnapshot) socket.send(lastSnapshot);
+  socket.send(JSON.stringify(forge.view()));
   socket.on("message", () => socket.close(1008, "Read-only overlay"));
 });
 worker.on(
   "message",
-  (message: { type: string; id?: number; ok?: boolean; error?: string }) => {
+  (message: {
+    type: string;
+    id?: number;
+    ok?: boolean;
+    error?: string;
+    result?: unknown;
+    checkpoint?: HostCheckpoint;
+  }) => {
     if (message.type === "snapshot") {
       lastSnapshot = JSON.stringify(message);
       for (const client of sockets.clients)
@@ -302,9 +415,15 @@ worker.on(
       if (!pending) return;
       clearTimeout(pending.timer);
       requests.delete(message.id);
-      if (message.ok) pending.resolve(message);
+      if (message.ok) pending.resolve(message.result);
       else pending.reject(new Error(message.error ?? "Simulation failed"));
-    }
+    } else if (
+      (message.type === "checkpoint" || message.type === "rollback") &&
+      message.checkpoint &&
+      !stopping &&
+      simulationReady
+    )
+      forge.acceptCheckpoint(message.checkpoint, message.type === "rollback");
   },
 );
 worker.on("error", (error) => {
@@ -315,6 +434,12 @@ worker.on("error", (error) => {
 async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
+  await forge.close();
+  try {
+    forge.store.checkpoint(await checkpoint());
+  } catch {
+    /* Worker may have failed. Keep the preceding durable checkpoint. */
+  }
   audience.stop();
   for (const pending of requests.values()) {
     clearTimeout(pending.timer);
@@ -355,6 +480,13 @@ server.listen(port, "127.0.0.1", () => {
         console.error(`Could not load mod ${id}:`, error);
       }
     }
+    const saved = forge.store.checkpoint();
+    if (saved) await sendCommand({ type: "restore", checkpoint: saved });
+    else {
+      await sendCommand({ type: "baseline" });
+      forge.store.checkpoint(await checkpoint());
+    }
+    simulationReady = true;
     if (!stopping) await audience.start();
   })();
 });

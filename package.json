@@ -8,6 +8,7 @@
     "pnpm": ">=10 <11"
   },
   "scripts": {
+    "forge:dry-run": "pnpm --filter @chatforge/server forge:dry-run",
     "dev": "pnpm build && pnpm --parallel --filter @chatforge/server --filter @chatforge/overlay --filter @chatforge/dashboard dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",

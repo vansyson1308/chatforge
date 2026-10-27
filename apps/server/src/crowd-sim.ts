@@ -133,6 +133,7 @@ export class CrowdSim implements ChatSource {
   constructor(
     seed: number,
     private receive: (event: SourceEvent) => void,
+    private persist: (state: number) => void = () => {},
   ) {
     this.rng = seed >>> 0 || 1;
   }
@@ -145,6 +146,11 @@ export class CrowdSim implements ChatSource {
     return this.rng / 4294967296;
   }
   next(): SourceEvent {
+    const event = this.generate();
+    this.persist(this.rng);
+    return event;
+  }
+  private generate(): SourceEvent {
     const persona = personas[Math.floor(this.random() * personas.length)]!;
     const choice = this.random();
     if (choice < 0.08)

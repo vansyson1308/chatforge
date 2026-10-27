@@ -1,5 +1,19 @@
 # Security
 
+## M3 AI and prompt injection
+
+Viewer ideas/names, model cards, source and `forgeTest` are untrusted. The Producer applies host/real-world/ads/spam rules and `omni-moderation-latest`; provider failure fails closed. Viewer text is serialized as data under a system instruction and compact Mod API summary. Server-assigned group IDs resolve to actual contributors, preventing invented attribution. Empty-credit cards are labelled Forge suggestions. Moderation and prompts are not sandbox boundaries.
+
+Builder uses a dedicated ignored Codex home, a copy of the existing login, and a minimal OS environment without OpenAI/Twitch keys. Apps/plugins, remote plugin discovery, multi-agent and web search are disabled. Explicit native Windows sandbox selection enables the SDK's `workspace-write` policy; command network access is off and approvals are `never`. References have integrity hashes; a manifest rejects unexpected writes, tampering, symlinks and excessive files/nesting/size. Trusted host-side Gatekeeper rechecks source independently of the Builder's own CLI result. Global Codex configuration is unchanged.
+
+**Scope:** workspace-write restricts writes, not all filesystem reads. Reference hashes are admission checks, not OS read-only ACLs. This implements the brief's policy; a hostile Builder requiring deny-by-default reads needs a separate least-privilege account/container or a tested custom permission profile. No-network, minimal inherited secrets and disabled connectors reduce exposure; local account/SDK remain trusted infrastructure. Do not claim complete protection against local credential reads.
+
+HUD activity is allowlisted generic categories only. Raw reasoning, prose, commands/output, provider bodies and MCP payloads are never forwarded. Bounded Gatekeeper diagnostics render as text. Explicit `.env` credentials override a parent tool's injected credentials; a regression test covers the mismatch that initially caused a false credit-exhaustion diagnosis.
+
+Acorn checks at most 24 KiB and requires direct named `register` and literal `forgeTest`. Imports, host globals, eval/constructors, async/Promise/WebAssembly, prototype tricks and dynamic computed properties are forbidden. Candidate source runs only in QuickJS. Two 900-tick runs use the current checkpoint/mod set and check budgets, exceptions/rollback, entity/rule invariants, equal hashes, registered card commands and candidate-owned observable effects. Other live mods and invisible zero-strength FX cannot satisfy acceptance. English acceptance prose is not a formal semantic proof; the explicit `forgeTest` claims are machine-checked.
+
+One build slot, a four-minute total deadline, two repair retries and an hourly cap bound AI work. Live failure restores the failed version's pre-deployment checkpoint; Safe Mode restores the seed baseline. Full rollback history persists across restart. Forge controls remain local JSON POSTs behind Host/Origin/remote checks; the overlay receives no source, checkpoint or auth data. Test discovery excludes `runtime/`, including SDK caches and generated code. M5 still owns the broader adversarial/long-stream audit.
+
 ## Threat model
 
 Twitch viewers control text, names and events. Generated mod code is untrusted and may try to escape, exhaust CPU/memory, alter host objects, corrupt persisted state or attack the overlay. Developer endpoints are powerful local controls.

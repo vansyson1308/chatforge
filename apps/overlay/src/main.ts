@@ -1,6 +1,11 @@
 import "./style.css";
 import { renderSnapshotSchema } from "../../../packages/shared/src/protocol.js";
 import { appearance, placeLabels, type Label } from "./presentation.js";
+import {
+  forgeViewSchema,
+  type ForgeView,
+} from "../../../packages/shared/src/forge.js";
+import { drawForgeHud } from "./forge-hud.js";
 
 type Entity = {
   id: number;
@@ -46,6 +51,8 @@ let meteorEnabled = true;
 let joinSequence = 0;
 let oldEntities = new Map<number, Entity>();
 let sortedEntities: Entity[] = [];
+let forge: ForgeView | undefined;
+let forgeReceived = 0;
 
 function connect(): void {
   const socket = new WebSocket(
@@ -60,9 +67,14 @@ function connect(): void {
   };
   socket.onmessage = (event) => {
     try {
-      const parsed = renderSnapshotSchema.safeParse(
-        JSON.parse(String(event.data)),
-      );
+      const payload: unknown = JSON.parse(String(event.data));
+      const forgeMessage = forgeViewSchema.safeParse(payload);
+      if (forgeMessage.success) {
+        forge = forgeMessage.data;
+        forgeReceived = performance.now();
+        return;
+      }
+      const parsed = renderSnapshotSchema.safeParse(payload);
       if (!parsed.success) return;
       const wire = parsed.data;
       const data: Message = {
@@ -615,6 +627,7 @@ function render(time: number): void {
   ctx.fillStyle = "#e8d7b1";
   ctx.fillText("J JOIN  ·  S SUB  ·  R RAID  ·  M MOD", 1175, 650);
   requestAnimationFrame(render);
+  if (forge) drawForgeHud(ctx, forge, time - forgeReceived);
 }
 connect();
 requestAnimationFrame(render);

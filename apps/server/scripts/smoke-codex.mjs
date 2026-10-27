@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 
-config({
+const loaded = config({
   path: fileURLToPath(new URL("../../../.env", import.meta.url)),
   quiet: true,
 });
+if (loaded.parsed?.OPENAI_API_KEY)
+  process.env.OPENAI_API_KEY = loaded.parsed.OPENAI_API_KEY;
 const model = process.env.CODEX_MODEL || "gpt-6.1-sol";
 const auth = process.env.CODEX_SMOKE_AUTH || "chatgpt";
 

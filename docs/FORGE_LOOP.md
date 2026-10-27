@@ -1,0 +1,23 @@
+# M3 operating guide
+
+Run `pnpm build` then `pnpm start`, choose Demo or Normal in the dashboard and click Start Forge. Demo collects/votes/auto-approves in 45/30/10 seconds; Normal uses 90/45 seconds and manual approval. One next round can collect/vote while a build runs, then waits for the build slot. Last vote per source/user wins; ties select the first card. Veto starts fresh collection. Stop aborts AI work and leaves the existing game running.
+
+Stages: `IDLE -> COLLECTING -> CURATING -> VOTING -> STREAMER_APPROVAL -> BUILDING -> TESTING -> DEPLOYING -> LIVE -> IDLE`, plus FAILED/ROLLED_BACK. Gatekeeper rejection returns TESTING to BUILDING in the same thread, at most twice. Failures do not retry paid requests indefinitely. A failed collection needs stop/start; normal approval can be vetoed.
+
+Producer uses OpenAI Responses/Zod structured outputs and sees moderated idea groups, Mod API capabilities and current mod summaries. Group IDs identify ideas independently of authors, allowing one viewer to submit multiple ideas without attribution ambiguity. Three cards contain title, pitch, visual hook, observable acceptance, commands, credits, feasibility, risk and a suggestion flag.
+
+`runtime/forge-workspace/` holds AGENTS.md, MOD_API.md, types.d.ts, card.json, checkpoint.json, examples, live references, `mods/<id>.js` and `forge-test.mjs`. Builder can iterate with `node forge-test.mjs mods/<id>.js`. Production rechecks independently in a separate worker with a 45-second Gatekeeper deadline. Both deterministic runs simulate 900 ticks, joins, waves, sub/cheer/raid/follow and card/test commands. Source and literal test data are parsed, never imported by Node.
+
+One Codex thread ID per SQLite season is reused across builds/restarts. `CODEX_REASONING_EFFORT=low` met the latency target. `BUILDER=responses` is an explicit fallback using BUILDER_MODEL and the same source/test contract; there is no silent fallback. BUILD_TIMEOUT_MS defaults to 240000 across all attempts and testing; BUILDS_PER_HOUR defaults to 12. Keep the existing machine login. Local `.env` credentials override inherited credentials; non-secret launch overrides such as PORT retain precedence. Never fix a failure by enabling unrestricted access or Builder network.
+
+Persistence uses ignored `runtime/ideas.sqlite`. Shutdown and periodic worker checkpoints retain world, sources, mod state, pre-deployment rollback history and the seed baseline. Crash recovery loses at most ten simulated seconds since the last periodic checkpoint. Startup resumes the season/game but leaves Forge stopped until explicitly started; interrupted AI work becomes FAILED. Preserve the database and `runtime/secrets/forge-codex/sessions/` for thread continuity. No season-reset UI is added in M3.
+
+Rollback to before a listed mod removes later generated mods too, restoring a coherent complete checkpoint. Safe Mode restores the baseline before generated mods. These actions rewind game progress deliberately instead of leaving modified rules behind. Patch notes retain shipped/rolled-back entries with escaped contributor text and SIM provenance.
+
+Routes: `GET /api/forge`, `GET /forge/patch-notes`; JSON `POST /api/forge/{start,stop,approve,veto,cancel,rollback,safe-mode}`. Start takes `{preset:"demo"|"normal"}`; rollback optionally takes a listed generated modId. WS `type:"forge"` includes round/build stages, deadlines, cards/tallies, idea count, activity/notices, mod summaries and usage. Engine `type:"snapshot"` remains separate. Both clients validate messages and render text only.
+
+`pnpm forge:dry-run 1` or `2` uses its own ignored database and no Twitch auth/chat. It restores prior successful dry-run mods and reuses a Codex thread. Collection/voting clocks fast-forward; AI/build/test work uses real wall time. Failure exits nonzero. Sources, reports and measured timelines are in [sample-mods](media/sample-mods/README.md). Both real samples are revalidated by ordinary tests; the healing sample also proves five HP restored to an injured hero.
+
+M4 note from the Twitch live test: wave 12 still had a full-health keep and idle enemies on hills. Combat pacing remains unchanged in M3.
+
+`node scripts/verify-forge-handoff.mjs` checks the built dashboard, WS, start/stop, Safe Mode, patch notes and HTTP boundary using a temporary `CHATFORGE_RUNTIME_DIR`. It cleans up its own server/browser/data and makes no Twitch/AI requests. Optional `CHATFORGE_CAPTURE=1` captures preview screenshots with the saved real cards injected into the browser protocol: [dashboard](media/m3-dashboard.png), [overlay](media/m3-overlay.png). These are labelled previews, not screenshots of an active live voting round.

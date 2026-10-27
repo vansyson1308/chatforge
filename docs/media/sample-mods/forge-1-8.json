@@ -1,0 +1,97 @@
+{
+  "title": "Wave-End Breather",
+  "card": {
+    "title": "Wave-End Breather",
+    "pitch": "Heroes recover a little health after each wave.",
+    "visualHook": "A small healing particle burst accompanies the recovery.",
+    "acceptance": [
+      "When wave_end occurs within 900 ticks, injured heroes receive a small heal.",
+      "Healthy heroes do not exceed their normal health limit."
+    ],
+    "commands": [],
+    "credits": [
+      {
+        "id": "sim-18",
+        "name": "CrownCat",
+        "source": "simulator"
+      }
+    ],
+    "feasibility": "Handle wave_end, query heroes, and use bounded healing and particles.",
+    "risk": "Low; healing is modest and limited to wave endings.",
+    "suggestion": false
+  },
+  "threadId": "01a17ccb-ee60-7711-9210-545ce1ebd805",
+  "attempts": 1,
+  "timeline": [
+    {
+      "round": 8,
+      "stage": "COLLECTING",
+      "seconds": 1.15
+    },
+    {
+      "round": 8,
+      "stage": "CURATING",
+      "seconds": 1.18
+    },
+    {
+      "round": 8,
+      "stage": "VOTING",
+      "seconds": 11.53
+    },
+    {
+      "round": 8,
+      "stage": "STREAMER_APPROVAL",
+      "seconds": 11.68
+    },
+    {
+      "round": 8,
+      "stage": "BUILDING",
+      "seconds": 11.77
+    },
+    {
+      "round": 8,
+      "stage": "TESTING",
+      "seconds": 60.67
+    },
+    {
+      "round": 8,
+      "stage": "DEPLOYING",
+      "seconds": 61.96
+    },
+    {
+      "round": 8,
+      "stage": "LIVE",
+      "seconds": 62.09
+    }
+  ],
+  "report": {
+    "ok": true,
+    "checks": [
+      {
+        "name": "static contract",
+        "ok": true,
+        "detail": "24 KiB / restricted AST / literal contract"
+      },
+      {
+        "name": "simulation 1",
+        "ok": true,
+        "detail": "900 ticks; 17 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "simulation 2",
+        "ok": true,
+        "detail": "900 ticks; 17 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "determinism",
+        "ok": true,
+        "detail": "45f893e6"
+      }
+    ],
+    "hashes": ["45f893e6", "45f893e6"],
+    "ticks": 1800,
+    "durationMs": 1141,
+    "effects": 17
+  },
+  "durationSeconds": 62.1772802
+}

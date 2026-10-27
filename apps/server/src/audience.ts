@@ -38,9 +38,17 @@ export class Audience {
       clientSecret: env.TWITCH_CLIENT_SECRET ?? "",
       redirectUri:
         env.TWITCH_REDIRECT_URI ?? "http://localhost:3000/auth/twitch/callback",
-      file: resolve(root, "runtime/secrets/twitch.json"),
+      file: resolve(
+        env.CHATFORGE_RUNTIME_DIR ?? resolve(root, "runtime"),
+        "secrets/twitch.json",
+      ),
     });
-    this.inbox = new IdeaInbox(resolve(root, "runtime/ideas.sqlite"));
+    this.inbox = new IdeaInbox(
+      resolve(
+        env.CHATFORGE_RUNTIME_DIR ?? resolve(root, "runtime"),
+        "ideas.sqlite",
+      ),
+    );
     this.out = new ChatOut((message) =>
       this.auth.helix("chat/messages", {
         method: "POST",
@@ -117,14 +125,20 @@ export class Audience {
       this.eventsub.stop();
       this.out.clear();
     };
-    this.sim = new CrowdSim(Number(env.SIM_SEED ?? 2026), receive);
+    this.sim = new CrowdSim(
+      Number(this.inbox.setting("sim-rng") ?? env.SIM_SEED ?? 2026),
+      receive,
+      (state) => this.inbox.setSetting("sim-rng", String(state)),
+    );
   }
   static async create(
     root: string,
     env: NodeJS.ProcessEnv,
     send: (payload: Record<string, unknown>) => Promise<unknown>,
   ): Promise<Audience> {
-    await mkdir(resolve(root, "runtime"), { recursive: true });
+    await mkdir(env.CHATFORGE_RUNTIME_DIR ?? resolve(root, "runtime"), {
+      recursive: true,
+    });
     return new Audience(root, env, send);
   }
   private record(source: string, text: string): void {
@@ -184,6 +198,11 @@ export class Audience {
         "twitch",
       )
     );
+  }
+  announce(text: string): void {
+    if (this.config.sources.includes("twitch") && this.auth.ready)
+      this.out.enqueue(text, "twitch");
+    else this.record("SIM", `Local forge: ${text}`);
   }
   stop(): void {
     this.stopped = true;

@@ -79,6 +79,7 @@ try {
         let simulated = false;
         ws.onmessage = (event) => {
           const snapshot = JSON.parse(event.data);
+          if (snapshot.type !== "snapshot") return;
           if (snapshot.entities.some((entity) => entity[10] === true)) {
             simulated = true;
             ws.send("mutation attempt");

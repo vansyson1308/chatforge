@@ -1,11 +1,11 @@
 import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
 
-config({
+const loaded = config({
   path: fileURLToPath(new URL("../../../.env", import.meta.url)),
   quiet: true,
 });
-const key = process.env.OPENAI_API_KEY;
+const key = loaded.parsed?.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
 if (!key) {
   console.log("OPENAI_API_KEY is not set; model availability was not checked.");
 } else {

@@ -4,7 +4,7 @@
 
 ChatForge turns Twitch chat into a live game studio: viewers pitch and vote on ideas, then a Codex-powered Builder creates sandboxed game mods that can appear on stream, credited to their creators.
 
-**Status: under construction - M2 complete.** Forge Keep has a deterministic simulation, bounded QuickJS mods, checkpoint rollback and a Canvas overlay. Twitch OAuth/EventSub, chat commands, a persisted Idea Inbox and visibly labeled Crowd Sim are implemented. The live AI forge loop arrives in M3; human Twitch verification follows [LIVE_TEST.md](docs/LIVE_TEST.md).
+**Status: under construction - M3 Forge loop implemented.** M2 passed a real Twitch live test. Chat now proposes and votes on three moderated cards; Codex builds a mod, the deterministic Gatekeeper tests it, and the running game hot-loads it with viewer credits. SQLite checkpoints support restart, rollback and Safe Mode. M4 will polish the visuals and combat pacing.
 
 ## Quick start
 
@@ -22,7 +22,11 @@ pnpm build
 
 `pnpm start` serves the built [dashboard](http://localhost:3000/dashboard/) and [overlay](http://localhost:3000/overlay/) on one loopback server. `pnpm dev` builds and starts the same server plus Vite overlay (5173) and dashboard (5174). Use localhost consistently for OAuth; login on 127.0.0.1 redirects to the registered callback host before creating its cookie. `?mode=overlay` selects the transparent bottom-band view for OBS.
 
-Set `CHAT_SOURCE=simulator`, `twitch`, or `twitch,simulator` in `.env`; source/intensity/auto-join controls also work in the dashboard for the current process. Crowd Sim uses 20 personas and 80 feature ideas plus 10 intentionally bad moderation fixtures. SIM tags are mandatory and simulated activity never posts into Twitch chat. `!idea` fills a pending inbox, `!vote` records preview choices; actual rounds and moderation are M3. Connect Twitch using the human steps in [LIVE_TEST.md](docs/LIVE_TEST.md). A non-affiliate channel can use chat/follow/raid while sub/Bits capabilities may be refused or idle.
+Set `CHAT_SOURCE=simulator`, `twitch`, or `twitch,simulator` in `.env`; source/intensity/auto-join controls also work in the dashboard. Crowd Sim uses 20 personas and 80 feature ideas plus 10 bad moderation fixtures. SIM tags are mandatory. Simulator help/status replies stay local; round announcements use Twitch only when its source is enabled and connected. `!idea` fills the pending inbox; `!vote 1|2|3` works during voting, with the last vote per viewer counting. Connect Twitch using [LIVE_TEST.md](docs/LIVE_TEST.md).
+
+For the Forge, put your `OPENAI_API_KEY` and an account-available `PRODUCER_MODEL` in `.env`, and run `codex login` once. Explicit `.env` credentials win over inherited process credentials (important when launching from another AI tool). Start Forge in the dashboard: Demo collects for 45 seconds, votes for 30, and auto-approves after 10; Normal uses 90/45 seconds and manual approval. Stop/cancel, approve/veto, rollback and Safe Mode are available there. The default Builder is Codex `gpt-6.1-sol`, low reasoning, a four-minute deadline and two repair retries; `BUILDER=responses` selects the explicit fallback.
+
+`pnpm forge:dry-run 1` and `pnpm forge:dry-run 2` run real AI rounds headlessly with simulated viewers, accelerated collection/vote clocks, no Twitch connection, and durable evidence in [sample-mods](docs/media/sample-mods/README.md). Builds are real wall-clock work. A missing key, API refusal, timeout or failed Gatekeeper exits nonzero. Download session patch notes from the dashboard.
 
 Run `pnpm smoke:codex` and `pnpm smoke:openai` for AI prerequisites. `pnpm test:e2e` intentionally reports unavailable until M5. See [the brief](brief/CHATFORGE_BRIEF.md) and [architecture](docs/ARCHITECTURE.md).
 

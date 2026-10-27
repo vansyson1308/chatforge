@@ -15,7 +15,8 @@ export class ChatOut {
   ) {}
   enqueue(text: string, source: Source): boolean {
     if (source !== "twitch") return false;
-    const message = `? ${sanitize(text, 498)}`;
+    // ASCII escape preserves U+2692 through editors/shells with legacy code pages.
+    const message = `\u2692 ${sanitize(text, 498)}`;
     const now = this.now();
     for (const [key, expiry] of this.seen)
       if (expiry <= now) this.seen.delete(key);
