@@ -22,9 +22,21 @@ export function hasLink(text: string): boolean {
     text,
   );
 }
+export function safeDisplayName(value: string): string {
+  if (/[\p{Cc}\p{Cf}<>]/u.test(value)) return "viewer";
+  const name = sanitize(value, 32);
+  if (
+    !name ||
+    !/^[\p{L}\p{N}_ -]+$/u.test(name) ||
+    /(?:spam|slur|hate|kill|advertis|unrelated|buy\s)/iu.test(name)
+  )
+    return "viewer";
+  return name;
+}
 export const ideaKey = (text: string): string =>
   sanitize(text, 240).toLocaleLowerCase("en-US");
 export class IdeaInbox {
+  onAdded?: (idea: Idea) => void;
   readonly db: DatabaseSync;
   readonly ideas: Idea[];
   constructor(file: string) {
@@ -113,6 +125,14 @@ export class IdeaInbox {
         .get()?.count ?? 0,
     );
   }
+  pendingPage(offset: number): Idea[] {
+    return this.db
+      .prepare(
+        "SELECT * FROM ideas WHERE status IN ('pending','not chosen') ORDER BY id DESC LIMIT 30 OFFSET ?",
+      )
+      .all(offset)
+      .map((row) => ideaSchema.parse(row));
+  }
   mark(id: number, status: Idea["status"], reason = ""): void {
     this.db
       .prepare("UPDATE ideas SET status=?,reason=? WHERE id=?")
@@ -165,6 +185,7 @@ export class IdeaInbox {
     };
     this.ideas.push(idea);
     if (this.ideas.length > 500) this.ideas.shift();
+    this.onAdded?.(idea);
     return idea;
   }
   close(): void {
@@ -210,8 +231,7 @@ export class ChatRouter {
   route(raw: Chat): string {
     const chat = {
       ...raw,
-      displayName:
-        sanitize(raw.displayName, 32) || sanitize(raw.login, 32) || "Viewer",
+      displayName: safeDisplayName(raw.displayName || raw.login),
       text: sanitize(raw.text),
     };
     const [command = "", ...rest] = chat.text.split(" ");

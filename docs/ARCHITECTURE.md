@@ -1,5 +1,13 @@
 # Architecture
 
+## Final product pass
+
+The current lead QC explicitly changes the brief's optional overlapping collection behavior: the next round now starts after the 14-second SHOWCASE, not while Codex is building. Deployment still uses the authoritative worker and atomic checkpoint. The first four seconds show the shipped card; the next segment invokes the new mod's own declared `forgeTest` command or event inside its QuickJS runtime. This is a requested change to timing, not an architecture replacement.
+
+The overlay idea feed receives only new ideas that pass local rules and `omni-moderation-latest`; a moderation error clears the feed. Display names are filtered at routing, rendering and credit boundaries, and text arguments to mod commands require the same fail-closed check. The dashboard inbox is paged in SQLite. The code preview reads only the current candidate file, bounds its size, rejects symbolic links and renders a sanitized 14-line tail; free strings, comments and unknown identifiers are removed before broadcast. Sprite preview data contains bounded pixels and hex colors rather than raw strings.
+
+Local Demo Director controls preserve the real Builder and label synthetic events as SIM. `pnpm demo:reset` requires the server to be stopped and creates a new season with no mods, keeping the token file and previous season records.
+
 ## M4 finish and M5 hardening
 
 The architecture remains server-authoritative. HUD content has named, opaque slots and is derived from the current Forge state; the same credit formatter is used for chat, dashboard and overlay. Generated emblems represent shipped patch IDs on the keep; added towers, lanterns and flags show progress at three-patch intervals. Ground enemies attack the keep, and persistent mod props are clamped to left flank, right flank, ramparts or sky decor anchors.

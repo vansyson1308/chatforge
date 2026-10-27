@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createRoot } from "react-dom/client";
 import {
   dashboardSchema,
+  ideaSchema,
   type DashboardState,
 } from "../../../packages/shared/src/chat.js";
 import "./style.css";
@@ -34,6 +35,12 @@ function Dashboard() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ideaPage, setIdeaPage] = useState(0);
+  const [directorChoice, setDirectorChoice] = useState(1);
+  const [inbox, setInbox] = useState<{
+    ideas: DashboardState["ideas"];
+    total: number;
+  }>({ ideas: [], total: 0 });
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
@@ -69,6 +76,32 @@ function Dashboard() {
       clearTimeout(timer);
     };
   }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const response = await fetch(`${base}/api/ideas?page=${ideaPage}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw Error("Inbox unavailable");
+        const data = z
+          .object({ ideas: z.array(ideaSchema).max(30), total: z.number() })
+          .parse(await response.json());
+        if (!controller.signal.aborted) setInbox(data);
+      } catch {
+        /* Existing page remains visible until reconnect. */
+      } finally {
+        if (!controller.signal.aborted)
+          timer = setTimeout(() => void poll(), 1000);
+      }
+    };
+    void poll();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [ideaPage]);
   async function post(path: string, body: unknown): Promise<void> {
     setBusy(true);
     setNotice("");
@@ -160,6 +193,86 @@ function Dashboard() {
         ) : null}
       </section>
       <ForgePanel base={base} />
+      <details>
+        <summary>Demo Director</summary>
+        <p>
+          Recording controls. Builds still use the real configured Builder.
+          Events below are SIM only.
+        </p>
+        <div className="row">
+          <button
+            disabled={busy}
+            onClick={() => void post("/api/forge/director-skip", {})}
+          >
+            Skip countdown
+          </button>
+          <label>
+            Winner{" "}
+            <select
+              value={directorChoice}
+              onChange={(e) => setDirectorChoice(Number(e.target.value))}
+              aria-label="Director winner"
+            >
+              <option value={1}>Card 1</option>
+              <option value={2}>Card 2</option>
+              <option value={3}>Card 3</option>
+            </select>
+          </label>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void post("/api/forge/director-winner", {
+                choice: directorChoice,
+              })
+            }
+          >
+            Force winner
+          </button>
+          <button
+            disabled={busy}
+            onClick={() => void post("/api/forge/director-replay", {})}
+          >
+            Replay showcase
+          </button>
+          {["sub", "raid", "cheer", "follow"].map((name) => (
+            <button
+              key={name}
+              disabled={busy}
+              onClick={() =>
+                void post("/api/director/event", { event: `twitch:${name}` })
+              }
+            >
+              SIM {name}
+            </button>
+          ))}
+          {state && (
+            <label>
+              SIM intensity{" "}
+              <select
+                value={state.config.intensity}
+                onChange={(e) =>
+                  void post("/api/config", {
+                    ...state.config,
+                    intensity: e.target.value,
+                  })
+                }
+                aria-label="Director SIM intensity"
+              >
+                <option value="chill">Chill</option>
+                <option value="normal">Normal</option>
+                <option value="hype">Hype</option>
+              </select>
+            </label>
+          )}
+          <a
+            href={`${base}/overlay/?mode=overlay&clean=1`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open clean OBS overlay
+          </a>
+        </div>
+      </details>
       {!state ? (
         <p>Connecting to local server…</p>
       ) : (
@@ -306,11 +419,11 @@ function Dashboard() {
             </section>
             <section>
               <h2>
-                Idea Inbox <small>{state.ideas.length}</small>
+                Idea Inbox <small>{inbox.total}</small>
               </h2>
               <p>Pending moderation · not yet approved for building</p>
               <ol className="feed">
-                {[...state.ideas].reverse().map((idea) => (
+                {inbox.ideas.map((idea) => (
                   <li key={idea.id}>
                     <span className="tag">
                       {idea.source === "simulator" ? "SIM" : "Twitch"}
@@ -324,6 +437,21 @@ function Dashboard() {
                   </li>
                 ))}
               </ol>
+              <div className="controls">
+                <button
+                  disabled={ideaPage === 0}
+                  onClick={() => setIdeaPage((p) => p - 1)}
+                >
+                  Newer
+                </button>
+                <span>Page {ideaPage + 1}</span>
+                <button
+                  disabled={(ideaPage + 1) * 30 >= inbox.total}
+                  onClick={() => setIdeaPage((p) => p + 1)}
+                >
+                  Older
+                </button>
+              </div>
               <p>
                 {state.votes.length} viewers voted this round. Last vote wins.
               </p>

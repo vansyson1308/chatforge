@@ -6,7 +6,15 @@ export const creditSchema = z.object({
   source: z.enum(["twitch", "simulator"]),
 });
 export function formatCredit(credit: { name: string; source: string }): string {
-  return `@${credit.name}${credit.source === "simulator" ? " (SIM)" : ""}`;
+  const name = credit.name.normalize("NFC");
+  const safe =
+    name.length > 0 &&
+    Array.from(name).length <= 32 &&
+    /^[\p{L}\p{N}_ -]+$/u.test(name) &&
+    !/(?:spam|slur|hate|kill|advertis|unrelated|buy\s)/iu.test(name)
+      ? name
+      : "viewer";
+  return `@${safe}${credit.source === "simulator" ? " (SIM)" : ""}`;
 }
 export function formatCredits(
   credits: readonly { name: string; source: string }[],
@@ -97,6 +105,7 @@ export const stageSchema = z.enum([
   "BUILDING",
   "TESTING",
   "DEPLOYING",
+  "SHOWCASE",
   "LIVE",
   "FAILED",
   "ROLLED_BACK",
@@ -134,6 +143,8 @@ export interface ForgeRound {
   report: GateReport | null;
 }
 export interface ForgeView {
+  code?: { lines: string[]; sprite?: { rows: number[][]; colors: string[] } };
+  previousBuild?: boolean;
   connection?: { twitchEnabled: boolean; eventsub: string };
   retirement?: { enabled: boolean; limit: number };
   patches?: { id: string; title: string; credits: ForgeCard["credits"] }[];
@@ -187,6 +198,20 @@ const roundSchema = z.object({
   report: gateReportSchema.nullable(),
 });
 export const forgeViewSchema = z.object({
+  code: z
+    .object({
+      lines: z.array(z.string().max(120)).max(14),
+      sprite: z
+        .object({
+          rows: z
+            .array(z.array(z.number().int().min(0).max(8)).max(32))
+            .max(32),
+          colors: z.array(z.string().regex(/^#[0-9a-f]{6}$/i)).max(8),
+        })
+        .optional(),
+    })
+    .optional(),
+  previousBuild: z.boolean().optional(),
   connection: z
     .object({ twitchEnabled: z.boolean(), eventsub: z.string() })
     .optional(),

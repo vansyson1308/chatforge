@@ -23,6 +23,7 @@
     "test:fps": "node scripts/measure-overlay.mjs",
     "start": "pnpm --filter @chatforge/server dev",
     "stream": "pnpm build && node scripts/stream.mjs",
+    "demo:reset": "node scripts/demo-reset.mjs",
     "forge:soak": "pnpm build && node scripts/soak-forge.mjs"
   },
   "devDependencies": {

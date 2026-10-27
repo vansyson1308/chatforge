@@ -101,6 +101,9 @@ export class ModHost {
   commands(id: string): string[] {
     return Object.keys(this.mods.get(id)?.declarations.commands ?? {});
   }
+  events(id: string): string[] {
+    return [...(this.mods.get(id)?.declarations.events ?? [])];
+  }
   checkpoint(): WorldState {
     return this.world.snapshot();
   }
@@ -707,6 +710,28 @@ export class ModHost {
         !this.call(id, "event", String(event.type), event)
       )
         break;
+  }
+  showcase(id: string, command?: string, event?: string): void {
+    const runtime = this.mods.get(id);
+    if (!runtime) throw Error("Showcase mod is unavailable");
+    if (command && runtime.declarations.commands[command] !== undefined) {
+      if (!this.call(id, "command", command, { viewer: "ChatForge", args: "" }))
+        throw Error("Showcase command failed");
+      return;
+    }
+    if (event && runtime.declarations.events.includes(event)) {
+      if (
+        !this.call(id, "event", event, {
+          type: event,
+          viewer: "ChatForge",
+          source: "simulator",
+          count: 1,
+        })
+      )
+        throw Error("Showcase event failed");
+      return;
+    }
+    throw Error("No registered showcase action");
   }
   tick(): void {
     this.cpu.clear();

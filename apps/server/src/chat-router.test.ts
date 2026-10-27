@@ -27,6 +27,21 @@ const chat: Chat = {
   emoteOnly: false,
 };
 describe("chat input boundary", () => {
+  it("paginates newest pending ideas without rendering the entire inbox", () => {
+    const inbox = new IdeaInbox(":memory:");
+    try {
+      for (let i = 0; i < 67; i++)
+        inbox.add({ ...chat, userId: String(i) }, `idea ${i}`, i);
+      inbox.mark(67, "rejected");
+      expect(inbox.pendingCount()).toBe(66);
+      expect(inbox.pendingPage(0)).toHaveLength(30);
+      expect(inbox.pendingPage(0)[0]?.id).toBe(66);
+      expect(inbox.pendingPage(30)[0]?.id).toBe(36);
+      expect(inbox.pendingPage(60)).toHaveLength(6);
+    } finally {
+      inbox.close();
+    }
+  });
   it("removes controls, zero width and bidi while preserving Unicode and emoji", () => {
     expect(sanitize(" Mưa\u200b小雨\u202e\u2066 \x00\n🔥  hi ")).toBe(
       "Mưa小雨 🔥 hi",
@@ -196,7 +211,8 @@ describe("Crowd Sim and outbound isolation", () => {
   it("rate-limits, deduplicates, caps Unicode length and never sends simulation", async () => {
     let now = 0;
     const send = vi.fn().mockResolvedValue({ data: [{ is_sent: true }] });
-    const out = new ChatOut(send, () => now);
+    const delivered = vi.fn();
+    const out = new ChatOut(send, () => now, delivered);
     expect(out.enqueue("Sim!", "simulator")).toBe(false);
     expect(out.enqueue("Hello", "twitch")).toBe(true);
     expect(out.enqueue("Hello", "twitch")).toBe(false);
@@ -209,6 +225,7 @@ describe("Crowd Sim and outbound isolation", () => {
     expect(send).toHaveBeenCalledTimes(2);
     expect(Array.from(send.mock.calls[1]![0] as string)).toHaveLength(500);
     expect(send.mock.calls[0]![0]).toBe("\u2692 Hello");
+    expect(delivered).toHaveBeenCalledWith("\u2692 Hello", "sent");
     now = 60000;
     expect(out.enqueue("Hello", "twitch")).toBe(true);
     send.mockRejectedValueOnce(new TwitchError(429, 40000));

@@ -8,7 +8,12 @@ import {
 import { TwitchAuth } from "./twitch-auth.js";
 import { EventSub } from "./eventsub.js";
 import { formatCredit } from "../../../packages/shared/src/forge.js";
-import { IdeaInbox, ChatRouter, sanitize } from "./chat-router.js";
+import {
+  IdeaInbox,
+  ChatRouter,
+  sanitize,
+  safeDisplayName,
+} from "./chat-router.js";
 import { ChatOut } from "./chat-out.js";
 import { CrowdSim } from "./crowd-sim.js";
 
@@ -23,12 +28,17 @@ export class Audience {
   private log: DashboardState["log"] = [];
   private sequence = 0;
   private stopped = false;
+  approveCommandArgs?: (text: string) => Promise<boolean>;
+  private sendSimulation: (
+    payload: Record<string, unknown>,
+  ) => Promise<unknown>;
   config: DashboardState["config"];
   private constructor(
     root: string,
     env: NodeJS.ProcessEnv,
     send: (payload: Record<string, unknown>) => Promise<unknown>,
   ) {
+    this.sendSimulation = send;
     this.config = sourceConfigSchema.parse({
       sources: (env.CHAT_SOURCE ?? "simulator").split(","),
       intensity: env.SIM_INTENSITY ?? "normal",
@@ -50,15 +60,18 @@ export class Audience {
         "ideas.sqlite",
       ),
     );
-    this.out = new ChatOut((message) =>
-      this.auth.helix("chat/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          broadcaster_id: this.auth.userId,
-          sender_id: this.auth.userId,
-          message,
+    this.out = new ChatOut(
+      (message) =>
+        this.auth.helix("chat/messages", {
+          method: "POST",
+          body: JSON.stringify({
+            broadcaster_id: this.auth.userId,
+            sender_id: this.auth.userId,
+            message,
+          }),
         }),
-      }),
+      Date.now,
+      (message, status) => this.record("Twitch out", `${status}: ${message}`),
     );
     const command = (payload: Record<string, unknown>) => {
       void send(payload).catch(() =>
@@ -73,13 +86,21 @@ export class Audience {
           userId: chat.userId,
           source: chat.source,
         }),
-      command: (name, chat, args) =>
-        command({
-          type: "command",
-          command: name,
-          viewer: formatCredit({ name: chat.displayName, source: chat.source }),
-          args,
-        }),
+      command: (name, chat, args) => {
+        void (async () => {
+          if (args && !(await this.approveCommandArgs?.(args))) return;
+          if (!this.stopped)
+            command({
+              type: "command",
+              command: name,
+              viewer: formatCredit({
+                name: chat.displayName,
+                source: chat.source,
+              }),
+              args,
+            });
+        })();
+      },
       reply: (text, source) => {
         if (source === "simulator") this.record("SIM", `Local bot: ${text}`);
         else this.out.enqueue(text, source);
@@ -96,7 +117,7 @@ export class Audience {
         );
       } else {
         const viewer = formatCredit({
-          name: sanitize(event.viewer, 32),
+          name: safeDisplayName(event.viewer),
           source: event.source,
         });
         this.record(label, `${event.type} · ${viewer} · ${event.count}`);
@@ -185,7 +206,7 @@ export class Audience {
       },
       config: this.config,
       log: this.log,
-      ideas: this.inbox.ideas,
+      ideas: this.inbox.pendingPage(0),
       votes: [...this.router.votes.values()],
       outbound: this.out.status,
     };
@@ -204,6 +225,24 @@ export class Audience {
     if (this.config.sources.includes("twitch") && this.auth.ready)
       this.out.enqueue(text, "twitch");
     else this.record("SIM", `Local forge: ${text}`);
+  }
+  async directorEvent(type: string): Promise<void> {
+    if (
+      !["twitch:sub", "twitch:raid", "twitch:cheer", "twitch:follow"].includes(
+        type,
+      )
+    )
+      throw Error("Invalid simulated event");
+    this.record("SIM", `Director: ${type}`);
+    await this.sendSimulation({
+      type: "event",
+      event: type,
+      viewer: "@Director (SIM)",
+      userId: "director",
+      source: "simulator",
+      count: 1,
+      detail: "SIM director",
+    });
   }
   stop(): void {
     this.stopped = true;

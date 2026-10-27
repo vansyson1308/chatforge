@@ -8,11 +8,13 @@ import { formatCredits } from "../../../packages/shared/src/forge.js";
 import type { Chat } from "../../../packages/shared/src/chat.js";
 import type { HostCheckpoint } from "./mod-host.js";
 import type { GateInput } from "./gatekeeper.js";
+import { inspectMod } from "./gatekeeper.js";
 import type { Builder } from "./builder.js";
 import type { Producer } from "./producer.js";
 import { worldOnlyReason } from "./producer.js";
 import { IdeaInbox, sanitize } from "./chat-router.js";
 import { ForgeStore } from "./forge-store.js";
+import type { CodePreview } from "./live-code.js";
 
 export interface ForgeSimulation {
   checkpoint(): Promise<HostCheckpoint>;
@@ -22,6 +24,7 @@ export interface ForgeSimulation {
   celebrate(text: string): Promise<void>;
   retire?(id: string): Promise<HostCheckpoint>;
   restore?(checkpoint: HostCheckpoint): Promise<void>;
+  showcase?(id: string, command?: string, event?: string): Promise<void>;
 }
 export interface ForgeOptions {
   producer: Producer;
@@ -41,6 +44,8 @@ export interface ForgeOptions {
   diagnostic?(error: unknown): void;
   connection?(): { twitchEnabled: boolean; eventsub: string };
   autoCollect?: boolean;
+  feed?(): { author: string; text: string; source: string }[];
+  showcaseMs?: number;
 }
 const presets = {
   demo: { collect: 45000, vote: 30000, approval: 10000 },
@@ -54,7 +59,8 @@ const transitions: Record<ForgeStage, ForgeStage[]> = {
   STREAMER_APPROVAL: ["BUILDING", "FAILED"],
   BUILDING: ["TESTING", "FAILED"],
   TESTING: ["BUILDING", "DEPLOYING", "FAILED"],
-  DEPLOYING: ["LIVE", "FAILED"],
+  DEPLOYING: ["SHOWCASE", "FAILED"],
+  SHOWCASE: ["LIVE", "ROLLED_BACK", "FAILED"],
   LIVE: ["IDLE", "ROLLED_BACK"],
   FAILED: ["IDLE"],
   ROLLED_BACK: ["IDLE"],
@@ -67,6 +73,7 @@ export class ForgeLoop {
   build: ForgeRound | null = null;
   notice = "Forge ready";
   activity: string[] = [];
+  private code?: CodePreview;
   private timer?: NodeJS.Timeout;
   private curating = false;
   private building = false;
@@ -74,6 +81,13 @@ export class ForgeLoop {
   private buildAbort?: AbortController;
   private finishedAt = 0;
   private buildStartedAt = 0;
+  private showcaseAt = 0;
+  private activeBuildId?: number;
+  private showcaseAction?: { command?: string; event?: string };
+  private showcaseFired = false;
+  private showcasePending = false;
+  private previousBuild = true;
+  private forcedWinner?: number;
   private tasks = new Set<Promise<void>>();
   private now: () => number;
   constructor(
@@ -84,7 +98,17 @@ export class ForgeLoop {
     this.now = options.now ?? Date.now;
     // Interrupted AI/build work is never silently deployed or billed again on restart.
     for (const round of this.store.latestRounds()) {
-      if (
+      if (round.stage === "SHOWCASE") {
+        round.stage = "LIVE";
+        round.deadline = null;
+        this.store.save(round, this.now());
+        this.inbox.db
+          .prepare(
+            "UPDATE builds SET status='LIVE' WHERE roundId=? AND status='SHOWCASE'",
+          )
+          .run(round.id);
+        this.build ??= round;
+      } else if (
         ["BUILDING", "TESTING", "DEPLOYING", "CURATING"].includes(round.stage)
       ) {
         round.stage = "FAILED";
@@ -113,6 +137,8 @@ export class ForgeLoop {
   view(): ForgeView {
     return {
       type: "forge",
+      code: this.code,
+      previousBuild: this.previousBuild && !!this.build,
       running: this.running,
       connection: this.options.connection?.(),
       preset: this.preset,
@@ -127,11 +153,7 @@ export class ForgeLoop {
           }
         : null,
       ideaCount: this.inbox.pendingCount(),
-      ideas: this.inbox.ideas
-        .filter((i) => i.status !== "rejected")
-        .slice(-4)
-        .reverse()
-        .map((i) => ({ author: i.author, text: i.text, source: i.source })),
+      ideas: this.options.feed?.() ?? [],
       activity: [...this.activity],
       notice: this.notice,
       mods: this.store.mods(),
@@ -210,17 +232,23 @@ export class ForgeLoop {
     this.preset = preset;
     this.running = true;
     this.inbox.setSetting("safe-mode", "false");
-    if (this.build && ["FAILED", "ROLLED_BACK"].includes(this.build.stage))
-      this.finishedAt = this.now();
     if (
-      !this.round ||
-      ["FAILED", "IDLE", "LIVE", "ROLLED_BACK"].includes(this.round.stage)
+      this.previousBuild &&
+      this.build &&
+      ["FAILED", "ROLLED_BACK"].includes(this.build.stage)
+    )
+      this.stage(this.build, "IDLE");
+    if (
+      (!this.round && this.build?.stage !== "SHOWCASE") ||
+      (this.round &&
+        ["FAILED", "IDLE", "LIVE", "ROLLED_BACK"].includes(this.round.stage))
     )
       this.collect();
     this.timer ??= setInterval(() => this.pulse(), 250);
     this.publish();
   }
   private collect(): void {
+    this.forcedWinner = undefined;
     this.round = this.store.createRound(this.now());
     this.options.resetRound();
     this.stage(
@@ -234,6 +262,46 @@ export class ForgeLoop {
   }
   pulse(): void {
     if (!this.running) return;
+    if (this.build?.stage === "SHOWCASE") {
+      const round = this.build;
+      const age = this.now() - this.showcaseAt;
+      if (age >= 4000 && !this.showcaseFired) {
+        this.showcaseFired = true;
+        this.showcasePending = true;
+        const action = this.showcaseAction;
+        const label = action?.command ?? action?.event ?? "the new feature";
+        this.notice = `▶ ${label} — try it yourself`;
+        this.options.announce(`${this.notice}`);
+        this.publish();
+        this.track(
+          (
+            this.options.simulation.showcase?.(
+              round.modId!,
+              action?.command,
+              action?.event,
+            ) ?? Promise.resolve()
+          )
+            .catch(() =>
+              this.line("Showcase could not be triggered; patch remains live"),
+            )
+            .finally(() => {
+              this.showcasePending = false;
+            }),
+        );
+      }
+      if (
+        age >= Math.max(5000, this.options.showcaseMs ?? 14000) &&
+        this.showcaseFired &&
+        !this.showcasePending
+      ) {
+        this.stage(round, "LIVE");
+        if (this.activeBuildId !== undefined)
+          this.store.saveBuild(this.activeBuildId, round);
+        this.activeBuildId = undefined;
+        this.finishedAt = this.now();
+      }
+      return;
+    }
     if (
       this.build &&
       ["LIVE", "FAILED", "ROLLED_BACK"].includes(this.build.stage) &&
@@ -254,7 +322,9 @@ export class ForgeLoop {
     )
       this.track(this.curate(round));
     else if (round.stage === "VOTING" && this.now() >= round.deadline!) {
-      round.winner = round.tallies.indexOf(Math.max(...round.tallies));
+      round.winner =
+        this.forcedWinner ?? round.tallies.indexOf(Math.max(...round.tallies));
+      this.forcedWinner = undefined;
       for (const [index, card] of round.cards.entries())
         for (const [n, id] of (card.ideaIds ?? []).entries())
           this.inbox.mark(
@@ -351,6 +421,50 @@ export class ForgeLoop {
     this.publish();
     return true;
   }
+  skipCountdown(): void {
+    if (
+      !this.running ||
+      !this.round ||
+      !["COLLECTING", "VOTING", "STREAMER_APPROVAL"].includes(
+        this.round.stage,
+      ) ||
+      this.round.deadline === null
+    )
+      throw Error("No active countdown");
+    this.round.deadline = this.now();
+    this.store.save(this.round, this.now(), false);
+    this.pulse();
+  }
+  forceWinner(choice: number): void {
+    if (
+      !this.running ||
+      this.round?.stage !== "VOTING" ||
+      !Number.isInteger(choice) ||
+      choice < 1 ||
+      choice > this.round.cards.length
+    )
+      throw Error("Choose a card during voting");
+    this.forcedWinner = choice - 1;
+    this.notice = `Director selected card ${choice} for this take`;
+    this.publish();
+  }
+  async replayShowcase(): Promise<void> {
+    if (this.building || this.build?.stage === "SHOWCASE")
+      throw Error("Wait for the active build or showcase");
+    const mod = this.store.mods().at(-1);
+    if (!mod || !this.options.simulation.showcase)
+      throw Error("No active showcase to replay");
+    const row = this.inbox.db
+      .prepare("SELECT source FROM mod_versions WHERE id=? AND active=1")
+      .get(mod.id);
+    if (typeof row?.source !== "string") throw Error("Showcase source missing");
+    const test = inspectMod(row.source);
+    const command = test.commands?.[0],
+      event = command ? undefined : test.events?.[0];
+    await this.options.simulation.showcase(mod.id, command, event);
+    this.notice = `SIM replay: ${command ?? event ?? "feature"}`;
+    this.publish();
+  }
   approve(): void {
     const round = this.round;
     if (!this.running || round?.stage !== "STREAMER_APPROVAL" || this.building)
@@ -366,10 +480,11 @@ export class ForgeLoop {
       return;
     }
     this.build = round;
+    this.code = undefined;
+    this.previousBuild = false;
     this.round = null;
     this.building = true;
     this.track(this.buildRound(round));
-    if (this.running && this.options.autoCollect !== false) this.collect();
   }
   veto(): void {
     if (!this.round || this.round.stage !== "STREAMER_APPROVAL")
@@ -413,6 +528,7 @@ export class ForgeLoop {
   private async buildRound(round: ForgeRound): Promise<void> {
     const started = this.now(),
       buildId = this.store.beginBuild(round.id, started);
+    this.activeBuildId = buildId;
     this.buildStartedAt = started;
     this.finishedAt = 0;
     this.buildAbort = new AbortController();
@@ -454,6 +570,10 @@ export class ForgeLoop {
           ...(round.report ? { report: round.report } : {}),
           signal,
           activity: this.line,
+          code: (value) => {
+            this.code = value;
+            this.publish();
+          },
         });
         source = result.source;
         this.store.addTokens(result.tokens);
@@ -502,9 +622,17 @@ export class ForgeLoop {
       const live = await this.options.simulation.checkpoint();
       signal.throwIfAborted();
       this.finishedAt = this.now();
-      if (!transitions[round.stage].includes("LIVE"))
+      if (!transitions[round.stage].includes("SHOWCASE"))
         throw Error("Invalid deployment transition");
       this.store.commitLive(round, source, live, this.now(), buildId);
+      const contract = inspectMod(source);
+      this.showcaseAction = {
+        command: contract.commands?.[0],
+        event: contract.commands?.length ? undefined : contract.events?.[0],
+      };
+      this.showcaseFired = false;
+      this.showcasePending = false;
+      this.showcaseAt = this.now();
       this.publish();
       try {
         await this.enforceRetirement();
@@ -523,7 +651,7 @@ export class ForgeLoop {
       );
       this.publish();
     } catch (error) {
-      if (deployed && round.stage !== "LIVE") {
+      if (deployed && round.stage !== "LIVE" && round.stage !== "SHOWCASE") {
         const current = await this.options.simulation.checkpoint();
         this.acceptCheckpoint(
           current.world.mods[round.modId]
@@ -542,6 +670,7 @@ export class ForgeLoop {
       this.store.saveBuild(buildId, round);
       this.store.save(round, this.now(), false);
       this.building = false;
+      if (round.stage !== "SHOWCASE") this.activeBuildId = undefined;
       this.publish();
     }
   }
@@ -560,7 +689,10 @@ export class ForgeLoop {
     this.store.checkpoint(checkpoint);
     this.store.reconcile(Object.keys(checkpoint.world.mods));
     if (rollback) {
-      if (this.build && ["LIVE", "IDLE", "FAILED"].includes(this.build.stage)) {
+      if (
+        this.build &&
+        ["SHOWCASE", "LIVE", "IDLE", "FAILED"].includes(this.build.stage)
+      ) {
         this.build.stage = "ROLLED_BACK";
         this.finishedAt = this.now();
         this.store.save(this.build, this.now());

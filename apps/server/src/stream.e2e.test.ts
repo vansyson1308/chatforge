@@ -95,6 +95,7 @@ it("fake EventSub chat reaches LIVE, then failed repair preserves the game and a
         return host.exportCheckpoint();
       },
       celebrate: async () => {},
+      showcase: async (id, command, event) => host.showcase(id, command, event),
     },
     gate: (input, _signal, onCheck) => gatekeeper(input, onCheck),
     broadcast: (view) => frames.push(structuredClone(view)),
@@ -157,6 +158,10 @@ it("fake EventSub chat reaches LIVE, then failed repair preserves the game and a
     });
     expect(loop.round?.tallies[0]).toBe(1);
     await vi.advanceTimersByTimeAsync(40500);
+    await loop.settled();
+    expect(loop.build?.stage).toBe("SHOWCASE");
+    expect(loop.round).toBeNull();
+    await vi.advanceTimersByTimeAsync(14250);
     await loop.settled();
     expect(loop.build?.stage).toBe("LIVE");
     expect(announcements.some((s) => s.includes("Shipped:"))).toBe(true);

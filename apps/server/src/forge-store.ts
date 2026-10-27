@@ -191,7 +191,7 @@ export class ForgeStore {
     try {
       this.deploy(round, source, now);
       this.checkpoint(checkpoint);
-      round.stage = "LIVE";
+      round.stage = "SHOWCASE";
       round.deadline = null;
       this.save(round, now);
       this.saveBuild(buildId, round);

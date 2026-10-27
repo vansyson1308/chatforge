@@ -4,7 +4,7 @@
 
 ChatForge turns Twitch chat into a live game studio: viewers pitch and vote on ideas, then a Codex-powered Builder creates sandboxed game mods that can appear on stream, credited to their creators.
 
-**Status: under construction - M4 finishing and M5 hardening in verification.** New mods receive a spectacle gate, larger sprites, timed visual events and chat commands. The stream HUD shows voting, Codex build activity, real Gatekeeper progress, ship credits and a Hall of Patches; the keep accumulates community emblems. Ground waves scale with heroes, bosses arrive every fifth wave, and a fallen keep rebuilds. M6 is reserved for the demo kit.
+**Status: under construction - M5 lead QC approved; final product pass in verification.** The stream HUD shows moderated ideas, voting, Codex's sanitized live code view, Gatekeeper checks and a timed showcase; the keep accumulates community emblems. M6 is reserved for the demo kit.
 
 ## Quick start
 
@@ -25,6 +25,10 @@ pnpm build
 Set `CHAT_SOURCE=simulator`, `twitch`, or `twitch,simulator` in `.env`; source/intensity/auto-join controls also work in the dashboard. Crowd Sim uses 20 personas and 80 feature ideas plus 10 bad moderation fixtures. SIM tags are mandatory. Simulator help/status replies stay local; round announcements use Twitch only when its source is enabled and connected. `!idea` fills the pending inbox; `!vote 1|2|3` works during voting, with the last vote per viewer counting. Connect Twitch using [LIVE_TEST.md](docs/LIVE_TEST.md).
 
 For the Forge, put your `OPENAI_API_KEY` and an account-available `PRODUCER_MODEL` in `.env`, and run `codex login` once. Explicit `.env` credentials win over inherited process credentials (important when launching from another AI tool). Start Forge in the dashboard: Demo collects for 45 seconds, votes for 30, and auto-approves after 10; Normal uses 90/45 seconds and manual approval. Stop/cancel, approve/veto, rollback and Safe Mode are available there. The default Builder is Codex `gpt-6.1-sol`, low reasoning, a four-minute deadline and two repair retries; `BUILDER=responses` selects the explicit fallback.
+
+The on-stream idea feed is fail-closed: local rules and `omni-moderation-latest` must both pass before a new idea appears. Viewer names pass a local display rule. Text arguments to mod commands are moderated before dispatch. After deployment the 14-second SHOWCASE displays credits, then invokes the mod's declared `forgeTest` command or event after four seconds; the next round starts afterwards. Set `SHOWCASE_MS` to 5000–60000 to adjust the duration.
+
+For recording, the localhost Demo Director can skip a countdown, force a winning card, replay the latest active showcase and fire SIM-labelled Twitch events. It never replaces the real Builder. `?clean=1` hides the sound chip. To start a fresh empty season, stop the server first and run `pnpm demo:reset`; previous seasons and Twitch tokens are preserved.
 
 `pnpm forge:dry-run 1` and `pnpm forge:dry-run 2` run real AI rounds headlessly with simulated viewers, accelerated collection/vote clocks, no Twitch connection, and durable evidence in [sample-mods](docs/media/sample-mods/README.md). Builds are real wall-clock work. A missing key, API refusal, timeout or failed Gatekeeper exits nonzero. Download session patch notes from the dashboard.
 

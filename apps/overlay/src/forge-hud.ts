@@ -6,13 +6,15 @@ import {
 let phaseKey = "",
   phaseAt = 0,
   newest = "",
-  ideaAt = 0;
+  ideaAt = 0,
+  lastCode = "",
+  codeChangedAt = 0;
 const bars = [0, 0, 0];
 const widths = new Map<string, number>();
 const slots = {
   top: { x: 310, y: 24, w: 866, h: 88 },
-  left: { x: 24, y: 132, w: 420, h: 480 },
-  right: { x: 900, y: 132, w: 276, h: 275 },
+  left: { x: 24, y: 132, w: 340, h: 480 },
+  right: { x: 900, y: 132, w: 276, h: 420 },
   center: { x: 400, y: 127, w: 400, h: 53 },
   ticker: { x: 24, y: 630, w: 1152, h: 30 },
 } as const;
@@ -116,7 +118,7 @@ function visibleCredit(
   let value = formatCredit(credit);
   while (chars.length && measure(ctx, value) > width) {
     chars.pop();
-    value = formatCredit({ ...credit, name: chars.join("") + "…" });
+    value = formatCredit({ ...credit, name: chars.join("") });
   }
   return value;
 }
@@ -161,6 +163,7 @@ export function drawForgeHud(
       "BUILDING",
       "TESTING",
       "DEPLOYING",
+      "SHOWCASE",
       "LIVE",
       "FAILED",
       "ROLLED_BACK",
@@ -188,6 +191,7 @@ export function drawForgeHud(
     BUILDING: "CODEX IS FORGING",
     TESTING: "GATEKEEPER IS TESTING",
     DEPLOYING: "PATCH ENTERING THE WORLD",
+    SHOWCASE: age < 4000 ? "SHIPPED!" : "SHOWCASE",
     LIVE: "SHIPPED!",
     FAILED: "BUILD REJECTED — GAME STAYS SAFE",
     ROLLED_BACK: "ROLLBACK — THE KEEP IS SAFE",
@@ -199,21 +203,25 @@ export function drawForgeHud(
         ? `${view.ideaCount} ideas collected`
         : phase === "VOTING"
           ? "TYPE !vote 1   /   !vote 2   /   !vote 3"
-          : phase === "LIVE" && winner
-            ? `${winner.title}  ·  TRY ${winner.commands.join(" ")}`
-            : phase === "BUILDING"
-              ? "Turning the winning idea into a mod"
-              : phase === "TESTING"
-                ? "Checking the world and candidate deterministically"
-                : phase === "DEPLOYING"
-                  ? "Applying the tested patch"
-                  : phase === "STREAMER_APPROVAL"
-                    ? "The winning idea is ready for approval"
-                    : phase === "CURATING"
-                      ? "Turning viewer ideas into three cards"
-                      : phase === "FAILED" || phase === "ROLLED_BACK"
-                        ? "The last safe version remains active"
-                        : "Chat imagines it. Codex builds it.";
+          : phase === "SHOWCASE" && winner
+            ? age < 4000
+              ? `${winner.title} — ${creditSummary(ctx, winner.credits, 650)}`
+              : view.notice
+            : phase === "LIVE" && winner
+              ? `${winner.title}  ·  TRY ${winner.commands.join(" ")}`
+              : phase === "BUILDING"
+                ? "Turning the winning idea into a mod"
+                : phase === "TESTING"
+                  ? "Checking the world and candidate deterministically"
+                  : phase === "DEPLOYING"
+                    ? "Applying the tested patch"
+                    : phase === "STREAMER_APPROVAL"
+                      ? "The winning idea is ready for approval"
+                      : phase === "CURATING"
+                        ? "Turning viewer ideas into three cards"
+                        : phase === "FAILED" || phase === "ROLLED_BACK"
+                          ? "The last safe version remains active"
+                          : "Chat imagines it. Codex builds it.";
   panel(
     ctx,
     slots.top.x,
@@ -266,31 +274,33 @@ export function drawForgeHud(
       const y = slots.left.y + i * 162,
         pct = (round.tallies[i] ?? 0) / total;
       bars[i]! += (pct - bars[i]!) * 0.08;
-      panel(ctx, 24, y, 420, 158);
+      panel(ctx, 24, y, 340, 158);
       drawText(ctx, `!vote ${i + 1}`, 40, y + 23, 110, 19, "#ffbd78", true);
       drawText(
         ctx,
         `${Math.round(pct * 100)}% · ${round.tallies[i] ?? 0}`,
-        292,
+        246,
         y + 23,
-        130,
+        100,
         18,
       );
-      fit(ctx, card.title, 40, y + 52, 388, 2, 27, 20, "#fff1d7", true);
-      fit(ctx, card.pitch, 40, y + 100, 388, 2, 17, 15, "#e6ded1");
+      fit(ctx, card.title, 40, y + 52, 308, 2, 24, 18, "#fff1d7", true);
+      font(ctx, 24, true);
+      const pitchY = y + (rows(ctx, card.title, 308).length > 1 ? 105 : 83);
+      fit(ctx, card.pitch, 40, pitchY, 308, 2, 16, 14, "#e6ded1");
       drawText(
         ctx,
-        creditSummary(ctx, card.credits, 388),
+        creditSummary(ctx, card.credits, 308),
         40,
         y + 145,
-        388,
+        308,
         17,
         "#a8edbb",
       );
       ctx.fillStyle = "#263544";
-      ctx.fillRect(40, y + 154, 388, 3);
+      ctx.fillRect(40, y + 154, 308, 3);
       ctx.fillStyle = "#ffad54";
-      ctx.fillRect(40, y + 154, 388 * bars[i]!, 3);
+      ctx.fillRect(40, y + 154, 308 * bars[i]!, 3);
     });
   } else if (phase === "COLLECTING" || phase === "CURATING") {
     drawText(ctx, "FROM THE CHAT", 40, 154, 330, 22, "#ffbd78", true);
@@ -300,22 +310,22 @@ export function drawForgeHud(
       ideaAt = now;
     }
     (view.ideas ?? []).forEach((idea, i) => {
-      const y = 173 + i * 92,
+      const y = 173 + i * 70,
         slide = Math.max(0, 1 - (now - ideaAt) / 500) * 30;
-      panel(ctx, 24 - slide, y, 354, 82);
+      panel(ctx, 24 - slide, y, 300, 62);
       fit(
         ctx,
-        visibleCredit(ctx, { name: idea.author, source: idea.source }, 320),
+        visibleCredit(ctx, { name: idea.author, source: idea.source }, 270),
         40 - slide,
         y + 24,
-        320,
+        270,
         1,
         18,
         15,
         "#a8edbb",
         true,
       );
-      fit(ctx, idea.text, 40 - slide, y + 49, 320, 2, 17, 15, "#e6ded1");
+      fit(ctx, idea.text, 40 - slide, y + 47, 270, 1, 15, 13, "#e6ded1");
     });
   }
   if (
@@ -355,32 +365,93 @@ export function drawForgeHud(
       ctx.fillStyle = i <= step ? "#ffad54" : "#394857";
       ctx.fillRect(x + 16 + i * 60, y + 121, 52, 3);
     });
-    fit(
+    drawText(
       ctx,
       view.activity.at(-1) ?? "Preparing the community specification",
       x + 16,
-      y + 151,
+      y + 148,
       w - 32,
-      3,
-      17,
-      15,
+      13,
       "#e6ded1",
     );
-    fit(
-      ctx,
-      failed
-        ? `CAUGHT A BUG: ${failed.detail}`
-        : build.report?.ok
-          ? `Gatekeeper passed · ${build.report.spectacle?.score ?? "-"}/10`
+    if (phase === "BUILDING") {
+      ctx.fillStyle = "#0b141e";
+      ctx.fillRect(x + 12, y + 164, w - 24, 220);
+      const codeKey = (view.code?.lines ?? []).join("\n");
+      if (codeKey !== lastCode) {
+        lastCode = codeKey;
+        codeChangedAt = now;
+      }
+      const codeOffset = 12 * Math.max(0, 1 - (now - codeChangedAt) / 300);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x + 12, y + 164, w - 24, 220);
+      ctx.clip();
+      ctx.font = "10px monospace";
+      (view.code?.lines ?? []).slice(-14).forEach((line, index) => {
+        ctx.fillStyle = /\b(function|const|return|export)\b/u.test(line)
+          ? "#f7bd7e"
+          : "#b5d8c1";
+        ctx.fillText(
+          line,
+          x + 18,
+          y + 181 + index * 13 + codeOffset,
+          view.code?.sprite ? 170 : w - 36,
+        );
+      });
+      ctx.restore();
+      if (view.code?.sprite) {
+        const sprite = view.code.sprite,
+          size = Math.min(
+            3,
+            60 /
+              Math.max(
+                sprite.rows.length,
+                ...sprite.rows.map((row) => row.length),
+              ),
+          );
+        sprite.rows.forEach((row, sy) =>
+          row.forEach((pixel, sx) => {
+            if (pixel > 0) {
+              ctx.fillStyle =
+                sprite.colors[(pixel - 1) % sprite.colors.length] ?? "#ffad54";
+              ctx.fillRect(
+                x + 197 + sx * size,
+                y + 180 + sy * size,
+                size,
+                size,
+              );
+            }
+          }),
+        );
+      }
+    } else if (phase === "TESTING" && build.report) {
+      build.report.checks.forEach((check, index) => {
+        drawText(
+          ctx,
+          `${check.ok ? "✓" : "×"} ${check.name}`,
+          x + 16,
+          y + 178 + index * 25,
+          w - 32,
+          15,
+          check.ok ? "#a8edbb" : "#ffab97",
+        );
+      });
+    } else {
+      fit(
+        ctx,
+        failed
+          ? `CAUGHT A BUG: ${failed.detail}`
           : "The world stays live during checks",
-      x + 16,
-      y + 218,
-      w - 32,
-      2,
-      16,
-      14,
-      failed ? "#ffab97" : "#a8edbb",
-    );
+        x + 16,
+        y + 180,
+        w - 32,
+        3,
+        16,
+        14,
+        failed ? "#ffab97" : "#a8edbb",
+      );
+    }
   }
   const selected =
     phase === "STREAMER_APPROVAL" && round?.winner !== null
@@ -389,16 +460,7 @@ export function drawForgeHud(
   if (selected && age < 3500) {
     const y = slots.center.y + Math.min(0, (age - 300) / 10);
     panel(ctx, slots.center.x, y, slots.center.w, slots.center.h);
-    drawText(
-      ctx,
-      "WINNING IDEA",
-      416,
-      y + 21,
-      370,
-      17,
-      "#ffbd78",
-      true,
-    );
+    drawText(ctx, "WINNING IDEA", 416, y + 21, 370, 17, "#ffbd78", true);
     fit(ctx, selected.title, 416, y + 45, 370, 1, 21, 17, "#fff1d7");
   }
   if ((phase === "FAILED" || phase === "ROLLED_BACK") && age < 700) {

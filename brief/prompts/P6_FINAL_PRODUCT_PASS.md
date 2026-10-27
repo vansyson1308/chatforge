@@ -1,0 +1,22 @@
+Lead QC of M5: strong. 21/21 soak builds LIVE, restart/resume works, p99 ≤ 3.6 ms with 15–16 mods, pacing is finally real (keep 74 % → 6 % → "THE KEEP HAS FALLEN — REBUILDING"), HUD is readable, SIM credits consistent, Go-Live checklist works (all green after connecting). I ran `pnpm stream` myself with Twitch + Crowd Sim and real Codex: 2 builds, both PASS on attempt 1 (~46 s). Cards are fun now ("Shroom With a View", "Pepper Under Pressure", "Beetle Gold Rush").
+
+This is the **final product pass** before M6 (docs + video). Fix all of the following.
+
+# P0 — must fix
+1. **Unmoderated viewer text is shown on stream.** The "FROM THE CHAT" feed displayed "spam spam spam spam spam", "Buy my unrelated vacuum cleaner" (and the overlay state also carries "Discuss unrelated stock prices") BEFORE moderation. A troll's slur would go straight onto the broadcast. Ideas may appear in the feed only after the rule layer + `omni-moderation-latest` pass (batch/cached for latency; if moderation is unavailable, show nothing). Rejected ideas: show at most a neutral "1 idea filtered". Apply a rule-layer check to viewer display names rendered on the overlay too (fallback label "viewer"). Tests: unsafe/spam/ad/slur-placeholder ideas never reach the overlay state.
+2. **The ship moment is effectively invisible.** Sampling the overlay every ~10 s I never caught "SHIPPED"; the next round started COLLECTING immediately and the new mod (e.g. Pepper Under Pressure) never visibly happened. Add a **SHOWCASE** stage after DEPLOYING (≈ 12–15 s): ~4 s "SHIPPED!" with title + credits, then the server automatically fires the mod's own `forgeTest` command/event once in the LIVE world so viewers see exactly what they built, with the caption "▶ !smore — try it yourself". Chat announcement at the same time. Only then does the next round begin COLLECTING. Configurable duration; test the ordering.
+3. **The build theatre is too thin for 45–60 s.** Today: one activity line ("Reading workspace references" / "Running local Gatekeeper") and a large empty panel. Add a **live code view**: as Codex writes `mods/<id>.js`, stream that file's latest ~14 lines into the build panel (monospace, light syntax tint, smooth scroll; read only that file, sanitize, never show anything else from the workspace). When sprite grids appear in the code, render a **live sprite preview** that fills in as the grid is written. In TEST, list the Gatekeeper checks ticking ✓ one by one (baseline, static, sim 1, sim 2, determinism, spectacle). This is the money shot for Codex judges.
+
+# P1 — polish
+4. Vote cards: large empty gap between a one-line title and the pitch — tighten vertical rhythm; make the card column narrower so the left heroes stay visible.
+5. "FROM THE CHAT" feed covers the left battlefield during COLLECTING/CURATING — max 3 compact items, smaller panel.
+6. Producer still proposes timid scope ("Arm two heroes", "at most three"). Push to "all heroes" or a clearly visible group within budgets; prefer effects the whole screen can see.
+7. Dashboard: Idea Inbox renders 300+ rows — show the newest 30 pending with paging. A stale "Build / Spiral Shell Turtle — FAILED Attempt 0/3 0.0s" from an earlier session is shown at the top on a fresh start — clear it or label it "previous session".
+8. Verify chat announcements on real Twitch end-to-end via the outbound log (round open, vote open, winner, shipped + showcase CTA, failed) and that they respect rate limits.
+
+# P2 — tools for recording the demo video (M6 will use these)
+9. **Demo Director** panel in the dashboard (localhost only): skip current countdown, force winner (for reproducible takes), replay last showcase, fire SIM-labelled sub/raid/cheer/follow, toggle Crowd Sim intensity, hide the "SOUND OFF" chip (`?clean=1`). Builds must still be REAL Codex builds — never fake a build in the director.
+10. A `pnpm demo:reset` that starts a fresh season (empty mod set, keep at base) while preserving Twitch tokens, so each recording take starts clean.
+
+# Verification
+All tests + CI green (add tests for 1, 2, 3, 7). Run `pnpm stream` with Twitch + Crowd Sim for 3 real rounds and capture screenshots of: feed (only moderated ideas), voting, build with live code view + sprite preview mid-build, Gatekeeper checks ticking, SHIPPED, SHOWCASE (mod visibly acting), next round. Save to `docs/media/hud/final-*.png` (delete superseded images). Update docs + journey; commit, push, stop processes, `pnpm clean:runtime`.

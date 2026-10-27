@@ -1,5 +1,11 @@
 # Security
 
+## Final product-pass viewer boundaries
+
+New feed entries are queued in bounded batches and are visible only after both the local rule layer and `omni-moderation-latest` succeed. Provider errors clear the visible feed and fail closed; the in-memory cache is bounded and is discarded at restart. The dashboard inbox is a local administrative surface and may contain pending unmoderated ideas. Viewer display names pass a local rule before entering worker snapshots, event callbacks and credit formatting. Text arguments to mod commands are checked before dispatch; empty-argument commands remain available if moderation is unavailable.
+
+The live build display is not raw Codex output: it reads only the candidate mod path, rejects symlinks and overlarge files, then removes comments, free-form strings and unknown identifiers before sending a maximum of 14 bounded lines. Sprite previews are bounded numeric pixels and validated hex colors. The workspace and authoring process remain untrusted, and text filtering and model moderation cannot prove the absence of all harmful or adversarial content. The existing QuickJS, Gatekeeper, local-origin and Builder sandbox boundaries still apply.
+
 ## M3 AI and prompt injection
 
 Viewer ideas/names, model cards, source and `forgeTest` are untrusted. The Producer applies host/real-world/ads/spam rules and `omni-moderation-latest`; provider failure fails closed. Viewer text is serialized as data under a system instruction and compact Mod API summary. Server-assigned group IDs resolve to actual contributors, preventing invented attribution. Empty-credit cards are labelled Forge suggestions. Moderation and prompts are not sandbox boundaries.

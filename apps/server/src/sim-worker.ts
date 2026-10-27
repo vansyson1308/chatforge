@@ -6,6 +6,7 @@ import {
   invariantFailure,
 } from "../../../packages/engine/src/invariants.js";
 import type { RenderSnapshot } from "../../../packages/shared/src/protocol.js";
+import { safeDisplayName } from "./chat-router.js";
 
 if (!parentPort) throw new Error("Simulation must run in a worker thread");
 const port = parentPort;
@@ -42,7 +43,7 @@ const send = () => {
       e.y,
       e.hp,
       e.maxHp,
-      e.viewer ?? "",
+      e.viewer ? safeDisplayName(e.viewer) : "",
       e.level,
       e.lastActiveTick ?? 0,
       e.simulated ?? false,
@@ -137,6 +138,13 @@ port.on(
                 color: "#ffd66b",
                 count: 80,
               },
+            );
+            break;
+          case "showcase":
+            host.showcase(
+              String(message.modId),
+              typeof message.command === "string" ? message.command : undefined,
+              typeof message.event === "string" ? message.event : undefined,
             );
             break;
           case "populate": {

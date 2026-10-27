@@ -192,7 +192,10 @@ export function ForgePanel({ base }: { base: string }) {
           ) : null}
           {view.build ? (
             <div className="forge-build">
-              <h3>Build / {view.build.cards[view.build.winner ?? 0]?.title}</h3>
+              <h3>
+                {view.previousBuild ? "Previous session" : "Build"} /{" "}
+                {view.build.cards[view.build.winner ?? 0]?.title}
+              </h3>
               <p>
                 <span className="tag">{view.build.stage}</span>Attempt{" "}
                 {view.build.attempts}/3 /{" "}

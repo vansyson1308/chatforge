@@ -15,6 +15,7 @@ import { resolve, relative, join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { readCandidatePreview, type CodePreview } from "./live-code.js";
 import type {
   ForgeCard,
   GateReport,
@@ -28,6 +29,7 @@ export interface BuildRequest {
   report?: GateReport;
   signal: AbortSignal;
   activity(line: string): void;
+  code?(preview: CodePreview): void;
 }
 export interface Builder {
   build(request: BuildRequest): Promise<{ source: string; tokens: number }>;
@@ -233,109 +235,131 @@ export class WorkspaceBuilder implements Builder {
         ? "Repairing candidate from Gatekeeper report"
         : "Reading MOD_API.md and card.json",
     );
-    let tokens = 0;
-    if (this.env.BUILDER === "responses") {
-      if (!this.env.OPENAI_API_KEY || !this.env.BUILDER_MODEL)
-        throw Error(
-          "Responses Builder requires OPENAI_API_KEY and verified BUILDER_MODEL",
-        );
-      const client = new OpenAI({
-        apiKey: this.env.OPENAI_API_KEY,
-        maxRetries: 0,
-      });
-      const response = await client.responses.parse(
-        {
-          model: this.env.BUILDER_MODEL,
-          input: [
-            {
-              role: "system",
-              content: `Write one deterministic sandboxed ChatForge ES module. ${testContract}\n${await readFile(resolve(this.directory, "MOD_API.md"), "utf8")}`,
-            },
-            {
-              role: "user",
-              content: JSON.stringify({
-                card: request.card,
-                liveMods: Object.keys(request.checkpoint.mods),
-                previousReport: request.report,
-              }),
-            },
-          ],
-          text: {
-            format: zodTextFormat(
-              z.object({ source: z.string() }),
-              "mod_source",
-            ),
-          },
-          max_output_tokens: 6000,
-        },
-        { signal: request.signal },
-      );
-      if (!response.output_parsed)
-        throw Error("Responses Builder returned no source");
-      await writeFile(
-        resolve(this.directory, `mods/${request.modId}.js`),
-        response.output_parsed.source,
-        "utf8",
-      );
-      tokens = response.usage?.total_tokens ?? 0;
-    } else {
-      const client = await this.client();
-      const effort = z
-        .enum(["minimal", "low", "medium", "high"])
-        .parse(this.env.CODEX_REASONING_EFFORT ?? "low");
-      const options: ThreadOptions = {
-        model: this.env.CODEX_MODEL ?? "gpt-6.1-sol",
-        modelReasoningEffort: effort,
-        sandboxMode: "workspace-write",
-        workingDirectory: this.directory,
-        skipGitRepoCheck: true,
-        approvalPolicy: "never",
-        networkAccessEnabled: false,
-        webSearchMode: "disabled",
-      };
-      this.thread ??= this.persistence.get()
-        ? client.resumeThread(this.persistence.get()!, options)
-        : client.startThread(options);
-      const prompt = request.report
-        ? `Repair ONLY mods/${request.modId}.js. Gatekeeper report:\n${JSON.stringify(request.report)}\nRun node forge-test.mjs mods/${request.modId}.js until green.`
-        : `Implement card.json in ONLY mods/${request.modId}.js. Follow this workspace AGENTS.md and MOD_API.md. ${testContract} Read files with PowerShell on Windows (no bash). Run node forge-test.mjs mods/${request.modId}.js. Keep it focused and finish quickly; do not narrate a plan.`;
-      const { events } = await this.thread.runStreamed(prompt, {
-        signal: request.signal,
-      });
-      for await (const event of events) {
-        if (event.type === "thread.started")
-          this.persistence.set(event.thread_id);
-        if (event.type === "turn.failed" || event.type === "error")
+    let previewBusy = false;
+    let previewStopped = false;
+    const preview = async () => {
+      if (previewBusy || previewStopped || !request.code) return;
+      previewBusy = true;
+      try {
+        const value = await readCandidatePreview(this.directory, request.modId);
+        if (value && !previewStopped) request.code(value);
+      } finally {
+        previewBusy = false;
+      }
+    };
+    const previewTimer = setInterval(() => void preview(), 500);
+    try {
+      let tokens = 0;
+      if (this.env.BUILDER === "responses") {
+        if (!this.env.OPENAI_API_KEY || !this.env.BUILDER_MODEL)
           throw Error(
-            "Codex turn failed; inspect the local Codex login/model availability",
+            "Responses Builder requires OPENAI_API_KEY and verified BUILDER_MODEL",
           );
-        if (event.type === "item.started" || event.type === "item.completed") {
-          const item = event.item;
-          if (item.type === "file_change")
-            request.activity(`Editing mods/${request.modId}.js`);
-          if (item.type === "command_execution")
-            request.activity(
-              item.command.includes("forge-test.mjs")
-                ? `Running local Gatekeeper${item.status === "completed" ? ` (exit ${item.exit_code ?? "unknown"})` : ""}`
-                : "Reading workspace references",
+        const client = new OpenAI({
+          apiKey: this.env.OPENAI_API_KEY,
+          maxRetries: 0,
+        });
+        const response = await client.responses.parse(
+          {
+            model: this.env.BUILDER_MODEL,
+            input: [
+              {
+                role: "system",
+                content: `Write one deterministic sandboxed ChatForge ES module. ${testContract}\n${await readFile(resolve(this.directory, "MOD_API.md"), "utf8")}`,
+              },
+              {
+                role: "user",
+                content: JSON.stringify({
+                  card: request.card,
+                  liveMods: Object.keys(request.checkpoint.mods),
+                  previousReport: request.report,
+                }),
+              },
+            ],
+            text: {
+              format: zodTextFormat(
+                z.object({ source: z.string() }),
+                "mod_source",
+              ),
+            },
+            max_output_tokens: 6000,
+          },
+          { signal: request.signal },
+        );
+        if (!response.output_parsed)
+          throw Error("Responses Builder returned no source");
+        await writeFile(
+          resolve(this.directory, `mods/${request.modId}.js`),
+          response.output_parsed.source,
+          "utf8",
+        );
+        tokens = response.usage?.total_tokens ?? 0;
+      } else {
+        const client = await this.client();
+        const effort = z
+          .enum(["minimal", "low", "medium", "high"])
+          .parse(this.env.CODEX_REASONING_EFFORT ?? "low");
+        const options: ThreadOptions = {
+          model: this.env.CODEX_MODEL ?? "gpt-6.1-sol",
+          modelReasoningEffort: effort,
+          sandboxMode: "workspace-write",
+          workingDirectory: this.directory,
+          skipGitRepoCheck: true,
+          approvalPolicy: "never",
+          networkAccessEnabled: false,
+          webSearchMode: "disabled",
+        };
+        this.thread ??= this.persistence.get()
+          ? client.resumeThread(this.persistence.get()!, options)
+          : client.startThread(options);
+        const prompt = request.report
+          ? `Repair ONLY mods/${request.modId}.js. Gatekeeper report:\n${JSON.stringify(request.report)}\nRun node forge-test.mjs mods/${request.modId}.js until green.`
+          : `Implement card.json in ONLY mods/${request.modId}.js. Follow this workspace AGENTS.md and MOD_API.md. ${testContract} Include a registered command or event in forgeTest. The first forgeTest command or event is triggered for a live showcase four seconds after deployment: make it visibly act even if the automatic introduction is already running. Read files with PowerShell on Windows (no bash). Run node forge-test.mjs mods/${request.modId}.js. Keep it focused and finish quickly; do not narrate a plan.`;
+        const { events } = await this.thread.runStreamed(prompt, {
+          signal: request.signal,
+        });
+        for await (const event of events) {
+          if (event.type === "thread.started")
+            this.persistence.set(event.thread_id);
+          if (event.type === "turn.failed" || event.type === "error")
+            throw Error(
+              "Codex turn failed; inspect the local Codex login/model availability",
             );
-          // Never forward reasoning, arbitrary agent text, shell output, or MCP payloads.
+          if (
+            event.type === "item.started" ||
+            event.type === "item.completed"
+          ) {
+            const item = event.item;
+            if (item.type === "file_change")
+              request.activity(`Editing mods/${request.modId}.js`);
+            if (item.type === "command_execution")
+              request.activity(
+                item.command.includes("forge-test.mjs")
+                  ? `Running local Gatekeeper${item.status === "completed" ? ` (exit ${item.exit_code ?? "unknown"})` : ""}`
+                  : "Reading workspace references",
+              );
+            // Never forward reasoning, arbitrary agent text, shell output, or MCP payloads.
+          }
         }
       }
+      request.signal.throwIfAborted();
+      const files = await this.files(),
+        candidate = `mods/${request.modId}.js`;
+      for (const [name, hash] of this.manifest)
+        if (name !== candidate && files.get(name) !== hash)
+          throw Error("Builder modified a read-only reference");
+      for (const name of files.keys())
+        if (name !== candidate && !this.manifest.has(name))
+          throw Error("Builder wrote an unexpected file");
+      const source = await readFile(resolve(this.directory, candidate), "utf8");
+      if (Buffer.byteLength(source, "utf8") > 24576)
+        throw Error("Candidate exceeds 24 KiB");
+      await preview();
+      return { source, tokens };
+    } finally {
+      previewStopped = true;
+      clearInterval(previewTimer);
     }
-    request.signal.throwIfAborted();
-    const files = await this.files(),
-      candidate = `mods/${request.modId}.js`;
-    for (const [name, hash] of this.manifest)
-      if (name !== candidate && files.get(name) !== hash)
-        throw Error("Builder modified a read-only reference");
-    for (const name of files.keys())
-      if (name !== candidate && !this.manifest.has(name))
-        throw Error("Builder wrote an unexpected file");
-    const source = await readFile(resolve(this.directory, candidate), "utf8");
-    if (Buffer.byteLength(source, "utf8") > 24576)
-      throw Error("Candidate exceeds 24 KiB");
-    return { source, tokens };
   }
 }
 // Exported for diagnostics without exposing configuration or secrets.

@@ -20,6 +20,7 @@ import { ForgeLoop } from "./forge-loop.js";
 import { ForgeStore } from "./forge-store.js";
 import { WorkspaceBuilder } from "./builder.js";
 import { openAIProducer } from "./producer.js";
+import { openAIFeedModeration } from "./feed-moderation.js";
 import { runGate } from "./gate-runner.js";
 import type { HostCheckpoint } from "./mod-host.js";
 
@@ -27,6 +28,9 @@ loadEnvironment(resolve(process.cwd(), "../../.env"));
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new Error("Invalid PORT");
+const showcaseMs = Number(process.env.SHOWCASE_MS ?? 14000);
+if (!Number.isInteger(showcaseMs) || showcaseMs < 5000 || showcaseMs > 60000)
+  throw new Error("SHOWCASE_MS must be an integer between 5000 and 60000");
 const worker = new Worker(new URL("./sim-worker.js", import.meta.url));
 const requests = new Map<
   number,
@@ -130,7 +134,11 @@ const audience = await Audience.create(root, process.env, sendCommand);
 const forgeStore = new ForgeStore(audience.inbox.db);
 const checkpoint = () =>
   sendCommand({ type: "checkpoint" }) as Promise<HostCheckpoint>;
+const feed = openAIFeedModeration(process.env, () => forge.publish());
+audience.inbox.onAdded = (idea) => feed.add(idea);
+audience.approveCommandArgs = (text) => feed.approveText(text);
 const forge = new ForgeLoop(audience.inbox, {
+  feed: () => feed.items(),
   producer: {
     curate: (...args) => openAIProducer(process.env).curate(...args),
   },
@@ -157,6 +165,9 @@ const forge = new ForgeLoop(audience.inbox, {
     celebrate: async (text) => {
       await sendCommand({ type: "celebrate", text });
     },
+    showcase: async (id, command, event) => {
+      await sendCommand({ type: "showcase", modId: id, command, event });
+    },
   },
   gate: runGate,
   connection: () => ({
@@ -181,6 +192,7 @@ const forge = new ForgeLoop(audience.inbox, {
   resetRound: () => audience.router.resetRound(),
   buildTimeoutMs: Number(process.env.BUILD_TIMEOUT_MS ?? 240000),
   buildCap: Number(process.env.BUILDS_PER_HOUR ?? 12),
+  showcaseMs,
 });
 audience.router.onVote = (chat, choice) => forge.vote(chat, choice);
 audience.router.forgeStatus = () =>
@@ -254,6 +266,18 @@ const server = createServer(async (req, res) => {
       json(res, 200, audience.status());
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/ideas") {
+      const page = Number(url.searchParams.get("page") ?? "0");
+      if (!Number.isSafeInteger(page) || page < 0 || page > 100000) {
+        json(res, 400, { error: "Invalid page" });
+        return;
+      }
+      json(res, 200, {
+        ideas: audience.inbox.pendingPage(page * 30),
+        total: audience.inbox.pendingCount(),
+      });
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/readiness") {
       let codexLoginFound = false;
       try {
@@ -319,6 +343,7 @@ const server = createServer(async (req, res) => {
           modId?: unknown;
           enabled?: unknown;
           limit?: unknown;
+          choice?: unknown;
         };
         switch (url.pathname.slice("/api/forge/".length)) {
           case "start":
@@ -358,11 +383,26 @@ const server = createServer(async (req, res) => {
               throw Error("Invalid retirement settings");
             await forge.setRetirement(input.enabled, input.limit);
             break;
+          case "director-skip":
+            forge.skipCountdown();
+            break;
+          case "director-winner":
+            if (typeof input.choice !== "number") throw Error("Invalid card");
+            forge.forceWinner(input.choice);
+            break;
+          case "director-replay":
+            await forge.replayShowcase();
+            break;
           default:
             json(res, 404, { error: "Not found" });
             return;
         }
         json(res, 200, forge.view());
+      } else if (url.pathname === "/api/director/event") {
+        const input = (await body(req)) as { event?: unknown };
+        if (typeof input.event !== "string") throw Error("Invalid event");
+        await audience.directorEvent(input.event);
+        json(res, 200, { ok: true });
       } else if (url.pathname === "/api/config") {
         audience.configure(await body(req));
         json(res, 200, { ok: true });
@@ -546,6 +586,7 @@ worker.on("error", (error) => {
 async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
+  feed.close();
   await forge.close();
   try {
     forge.store.checkpoint(await checkpoint());
@@ -572,9 +613,12 @@ process.on("SIGTERM", () => {
 server.listen(port, "127.0.0.1", () => {
   console.log(`ChatForge development server: http://127.0.0.1:${port}`);
   void (async () => {
-    const ids = new Set(["meteor-shower", "slime-king", "aurora-blessing"]);
+    const emptyDemo = audience.inbox.setting("demo-empty-mods") === "true";
+    const ids = new Set(
+      emptyDemo ? [] : ["meteor-shower", "slime-king", "aurora-blessing"],
+    );
     try {
-      for (const file of await readdir(runtimeDirectory))
+      for (const file of emptyDemo ? [] : await readdir(runtimeDirectory))
         if (/^[a-z][a-z0-9_-]{0,39}\.js$/.test(file))
           ids.add(file.slice(0, -3));
     } catch (error) {

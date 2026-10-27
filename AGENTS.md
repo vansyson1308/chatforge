@@ -9,7 +9,7 @@
 - M2 Twitch and Crowd Sim: complete; lead QC approved after a real Twitch live test on vansyson1308 (all seven subscriptions and real chat delivery verified).
 - M3 Forge loop: lead QC requested live checkpoint, parity, overlap and hygiene fixes; addressed together with M4.
 - M4 Overlay HUD, dashboard, Mod API v1.1 and game polish: follow-up QC fixes addressed alongside M5.
-- M5 Hardening, simulated-stream end-to-end test and performance: current milestone; implementation and local verification delivered for lead QC. Scope in brief/prompts/P5_POLISH_AND_HARDENING.md.
+- M5 Hardening, simulated-stream end-to-end test and performance: lead QC approved; final product pass is in progress under brief/prompts/P6_FINAL_PRODUCT_PASS.md.
 - M6 Demo kit.
 
 Update this status when milestones change. Do not build ahead without an explicit request.
@@ -21,6 +21,7 @@ Target Windows 11, PowerShell, Node 24 and pnpm 10. Never write bash-only script
 - Install: `pnpm install --frozen-lockfile`
 - Dev: `pnpm dev` (builds, then starts localhost server, Vite overlay 5173 and React dashboard 5174)
 - Stream: `pnpm stream` (builds, starts the local server and prints dashboard, overlay and OBS instructions)
+- New recording take: stop the server, then `pnpm demo:reset` (new empty season; Twitch tokens and previous seasons remain).
 - Build: `pnpm build`
 - Typecheck: `pnpm typecheck`
 - Lint: `pnpm lint`
@@ -50,6 +51,7 @@ For every task: typecheck, lint and tests green; update relevant docs; append an
 - Simulated viewers/events must carry visible SIM provenance. Simulator replies never enter the Twitch outbound queue.
 - Mods run only inside the QuickJS sandbox, never in the Node or browser host realm.
 - Viewer ideas and model output are untrusted data. Generated mods require the deterministic Gatekeeper; do not bypass it or weaken Builder sandbox/network limits. Local `.env` credentials take precedence over credentials inherited from a parent tool; never print either.
-- Builds freeze one admission snapshot shared by CLI/host. Host baseline faults never consume a Codex retry. While building, next round may only COLLECT.
+- Builds freeze one admission snapshot shared by CLI/host. Host baseline faults never consume a Codex retry. The next round begins only after SHOWCASE ends, per final-product QC.
+- Viewer ideas and command arguments must pass local rules and OpenAI moderation before they can reach stream-visible surfaces. Moderation failure hides the feed and blocks text arguments. Apply the display-name rule to overlay snapshots and credits.
 - New generated mods must pass the spectacle gate; preserve budgets and invariant checks.
 - Stop every dev server or background process you start before finishing. Remove temporary files. Disk space is scarce: never leave large caches or artifacts behind.

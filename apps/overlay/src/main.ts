@@ -77,7 +77,7 @@ function switchAudio(): void {
   sound.textContent = toggleAudio() ? "SOUND OFF" : "SOUND ON";
 }
 sound.onclick = switchAudio;
-document.body.append(sound);
+if (query.get("clean") !== "1") document.body.append(sound);
 
 function connect(): void {
   const socket = new WebSocket(

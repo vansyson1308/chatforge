@@ -6,7 +6,7 @@ import {
 } from "../../../packages/shared/src/forge.js";
 import { z } from "zod";
 import type { Idea } from "../../../packages/shared/src/chat.js";
-import { sanitize, hasLink, ideaKey } from "./chat-router.js";
+import { sanitize, hasLink, ideaKey, safeDisplayName } from "./chat-router.js";
 
 export interface Curation {
   cards: ForgeCard[];
@@ -30,7 +30,10 @@ export interface ProducerTransport {
 export const worldOnlyReason =
   "The forge only shapes the game world. Try a creature, spell or weather effect!";
 const forbiddenIdea =
-  /\b(?:delete\s+(?:(?:all|every|the|my|your)\s+)*(?:files?|folders?|system)|steal|dox\w*|password|api[ -]?key|openai\s*key|process\s*\.\s*env|loops?\s+forever|infinite\s+loop|credentials?|credit[ -]?card|advertis\w*|buy\s|spam|unrelated|slur_placeholder|subscribe to|ignore (?:all|previous)|reveal secrets|system prompt|powershell|terminal|cmd\.exe|install|download|real.world|kill yourself)\b/iu;
+  /\b(?:delete\s+(?:(?:all|every|the|my|your)\s+)*(?:files?|folders?|system)|steal|dox\w*|password|api[ -]?key|openai\s*key|process\s*\.\s*env|loops?\s+forever|infinite\s+loop|credentials?|credit[ -]?card|advertis\w*|buy\s|spam|unrelated|slur[ _-]?placeholder|subscribe to|ignore (?:all|previous)|reveal secrets|system prompt|powershell|terminal|cmd\.exe|install|download|real.world|kill yourself)\b/iu;
+export function allowedIdea(text: string): boolean {
+  return !forbiddenIdea.test(text) && !hasLink(text);
+}
 export const producerCardsSchema = z.object({
   cards: z
     .array(
@@ -50,7 +53,7 @@ export const producerCardsSchema = z.object({
 export const compactApi =
   "Pure register(api) declarations: defineEnemy(pixel sprite, hp/speed/damage/behavior), defineProjectile, defineHeroWeapon; on(event), every(ticks), onSchedule/schedule; registerCommand(!name, callback, {cooldownSec}). Callbacks: spawn, query (bounded handles damage/heal/equip/tag/setSpeed), deterministic random, JSON api.state, rules.get/set (bounded), fx.banner/telegraph/impact/shake/particles/tint/weather. Events tick, wave_start/end, hero_join, enemy_killed, keep_damaged, twitch:sub/cheer/raid/follow. Mod API v1.1: defineEnemy supports team hero/enemy/prop and scale 0.5..4; defineHat(name,sprite)/equipHat(heroId,name), defineProp(name,{sprite,scale}); fx.text/ring/beam/lightning/flash/trail/sky and sfx(anvil/thunder/magic/cheer). No filesystem, network, DOM, external images or async. Test simulation lasts 900 ticks (30 seconds); observable effects must occur in that window.";
 export const spectacleRubric =
-  "Every card must create a clip-worthy transformation visible within 10 seconds of deploy. Score /10: immediacy (2), chat command or Twitch participation (2), recognisable custom pixel creature/gear/boss (3), timed event with telegraph, climax and aftermath (3). Require >=7, a custom sprite and a chat command. Rewrite weak ideas into spectacular feasible versions while keeping credits. Reject particles-only, banners-only and tiny stat tweaks. Punchy funny titles of at most 28 characters, pitch at most 90 characters, vivid visualHook, fair bounded effects. Avoid duplicates of live/active builds. The Builder will trigger its feature automatically once within 10 seconds and again via chat.";
+  "Every card must create a clip-worthy transformation visible within 10 seconds of deploy. Prefer effects affecting all heroes or a clearly visible group within budgets, never just two or three heroes when a larger group is safe. Score /10: immediacy (2), chat command or Twitch participation (2), recognisable custom pixel creature/gear/boss (3), timed event with telegraph, climax and aftermath (3). Require >=7, a custom sprite and a chat command. Rewrite weak ideas into spectacular feasible versions while keeping credits. Reject particles-only, banners-only and tiny stat tweaks. Punchy funny titles of at most 28 characters, pitch at most 90 characters, vivid visualHook, fair bounded effects. Avoid duplicates of live/active builds. The Builder will trigger its feature automatically once within 10 seconds and again via chat.";
 function words(text: string): Set<string> {
   return new Set(
     ideaKey(text)
@@ -99,9 +102,7 @@ export class ForgeProducer implements Producer {
     liveMods: string[],
     signal: AbortSignal,
   ): Promise<Curation> {
-    const rejected = ideas
-      .filter((i) => forbiddenIdea.test(i.text) || hasLink(i.text))
-      .map((i) => i.id);
+    const rejected = ideas.filter((i) => !allowedIdea(i.text)).map((i) => i.id);
     const eligible = ideas
       .filter(
         (i) => !rejected.includes(i.id) && !duplicatesLive(i.text, liveMods),
@@ -151,7 +152,7 @@ export class ForgeProducer implements Producer {
       card.credits = indices.flatMap((i) =>
         groups[i]!.map((idea) => ({
           id: idea.userId,
-          name: sanitize(idea.author, 40),
+          name: safeDisplayName(idea.author),
           source: idea.source,
         })),
       );

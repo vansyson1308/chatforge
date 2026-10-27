@@ -460,6 +460,18 @@ export async function gatekeeper(
           throw Error(
             `Too subtle: spectacle ${score}/10. Auto-introduce before 10s, draw a >=12x12 sprite using >=4 colors, register a command, layer >=2 visual FX, and stage telegraph/climax/aftermath over >=3s. Observed sprites=${drawnSprites.size}, commands=${commands}, FX=${fx.size}, firstTick=${first}.`,
           );
+        if (input.spectacle) {
+          const command = test.commands?.[0];
+          const event = test.events?.[0];
+          if (
+            command
+              ? !host.commands(input.modId).includes(command)
+              : !event || !host.events(input.modId).includes(event)
+          )
+            throw Error(
+              "forgeTest must name a registered showcase command or event",
+            );
+        }
         report.hashes.push(world.hash());
         report.ticks += 900;
         checked({
@@ -474,6 +486,12 @@ export async function gatekeeper(
     phase = "determinism";
     if (report.hashes[0] !== report.hashes[1]) throw Error("Hash mismatch");
     checked({ name: phase, ok: true, detail: report.hashes[0]! });
+    if (input.spectacle)
+      checked({
+        name: "spectacle",
+        ok: true,
+        detail: `Score ${report.spectacle?.score ?? 0}/10`,
+      });
     report.ok = true;
   } catch (error) {
     checked({

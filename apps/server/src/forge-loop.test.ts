@@ -42,6 +42,7 @@ it("preserves CLI/host snapshot parity even while the live world advances during
         ...request,
         signal: undefined,
         activity: undefined,
+        code: undefined,
       }) as unknown as typeof request;
       for (let n = 0; n < 120; n++) f.host.tick();
       return { source: goodMod, tokens: 0 };
@@ -98,6 +99,9 @@ it("reopens durable season/checkpoint/thread and stops interrupted builds", asyn
     expect(
       second.inbox.db.prepare("SELECT status FROM builds").get()?.status,
     ).toBe("FAILED");
+    second.loop.start("demo");
+    expect(second.loop.build?.stage).toBe("IDLE");
+    expect(second.loop.view().previousBuild).toBe(true);
     second.host.rollback("generated");
     expect(Object.keys(second.host.world.state.mods)).toEqual(["seed"]);
   } finally {
@@ -153,7 +157,7 @@ it("a later live failure rolls back the generated set and broadcasts ROLLED_BACK
     await voting(f.loop);
     await vi.advanceTimersByTimeAsync(40000);
     await f.loop.settled();
-    expect(f.loop.build?.stage).toBe("LIVE");
+    expect(f.loop.build?.stage).toBe("SHOWCASE");
     for (let i = 0; i < 901; i++) f.host.tick();
     expect(f.host.diagnostics).toHaveLength(1);
     expect(f.host.world.hash()).toBe(before);
@@ -217,6 +221,7 @@ async function fixture(
         announcements.push(text);
         await onCelebrate();
       },
+      showcase: async (id, command, event) => host.showcase(id, command, event),
     },
     gate: (input, _signal, onCheck) => gatekeeper(input, onCheck),
     broadcast: (view) => frames.push(structuredClone(view)),
@@ -297,6 +302,18 @@ async function voting(loop: ForgeLoop) {
   await loop.settled();
   expect(loop.round?.stage).toBe("VOTING");
 }
+async function finishShowcase(loop: ForgeLoop) {
+  expect(loop.build?.stage).toBe("SHOWCASE");
+  expect(loop.round).toBeNull();
+  await vi.advanceTimersByTimeAsync(4000);
+  await loop.settled();
+  expect(loop.notice).toContain("try it yourself");
+  expect(loop.round).toBeNull();
+  await vi.advanceTimersByTimeAsync(10250);
+  await loop.settled();
+  expect(loop.build?.stage).toBe("LIVE");
+  expect(loop.round?.stage).toBe("COLLECTING");
+}
 it("Crowd Sim full round reaches LIVE, persists transitions and last-vote-wins", async () => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
   const f = await fixture();
@@ -311,7 +328,7 @@ it("Crowd Sim full round reaches LIVE, persists transitions and last-vote-wins",
     expect(f.loop.round?.winner).toBe(0);
     await vi.advanceTimersByTimeAsync(10000);
     await f.loop.settled();
-    expect(f.loop.build?.stage).toBe("LIVE");
+    await finishShowcase(f.loop);
     expect(f.loop.round?.stage).toBe("COLLECTING");
     expect(f.loop.store.mods()).toHaveLength(1);
     expect(f.loop.store.patchNotes()).toContain("Spark 1");
@@ -328,6 +345,7 @@ it("Crowd Sim full round reaches LIVE, persists transitions and last-vote-wins",
       "BUILDING",
       "TESTING",
       "DEPLOYING",
+      "SHOWCASE",
       "LIVE",
     ]);
     expect(
@@ -369,7 +387,7 @@ it("retries gate failures twice, emits FAILED and preserves last good game", asy
     await f.cleanup();
   }
 });
-it("only one build runs while another round collects; cancel aborts the adapter", async () => {
+it("does not begin another round while building; cancel aborts the adapter", async () => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
   const build = vi.fn(
     ({ signal }: Parameters<Builder["build"]>[0]) =>
@@ -385,7 +403,7 @@ it("only one build runs while another round collects; cancel aborts the adapter"
     await vi.advanceTimersByTimeAsync(40000);
     expect(f.loop.build?.stage).toBe("BUILDING");
     await vi.advanceTimersByTimeAsync(85000);
-    expect(f.loop.round?.stage).toBe("COLLECTING");
+    expect(f.loop.round).toBeNull();
     expect(build).toHaveBeenCalledOnce();
     expect(() => f.loop.approve()).toThrow();
     f.loop.cancel();
@@ -438,14 +456,14 @@ it("keeps each consecutive ship moment LIVE while celebration awaits worker ackn
     await voting(f.loop);
     await vi.advanceTimersByTimeAsync(40000);
     await f.loop.settled();
-    expect(f.loop.build?.stage).toBe("LIVE");
+    await finishShowcase(f.loop);
     await vi.advanceTimersByTimeAsync(45000);
     await f.loop.settled();
     expect(f.loop.round?.stage).toBe("VOTING");
     await vi.advanceTimersByTimeAsync(40000);
     await f.loop.settled();
     expect(count).toBe(2);
-    expect(f.loop.build?.stage).toBe("LIVE");
+    await finishShowcase(f.loop);
     await vi.advanceTimersByTimeAsync(4000);
     expect(f.loop.build?.stage).toBe("LIVE");
     await vi.advanceTimersByTimeAsync(1000);
@@ -468,11 +486,12 @@ it("retires the oldest mod into credited history and does not resurrect it on ro
     await voting(f.loop);
     await vi.advanceTimersByTimeAsync(40000);
     await f.loop.settled();
+    await finishShowcase(f.loop);
     await vi.advanceTimersByTimeAsync(45000);
     await f.loop.settled();
     await vi.advanceTimersByTimeAsync(40000);
     await f.loop.settled();
-    expect(f.loop.build?.stage).toBe("LIVE");
+    expect(f.loop.build?.stage).toBe("SHOWCASE");
     expect(f.loop.store.mods()).toHaveLength(1);
     expect(f.loop.store.mods(true)).toHaveLength(2);
     expect(f.loop.store.patchNotes()).toContain("retired");
@@ -498,6 +517,7 @@ it("keeps both live mods if retirement cannot be saved atomically", async () => 
     await voting(f.loop);
     await vi.advanceTimersByTimeAsync(40000);
     await f.loop.settled();
+    await finishShowcase(f.loop);
     vi.spyOn(f.loop.store, "retireAndCheckpoint").mockImplementationOnce(() => {
       throw Error("database unavailable");
     });
@@ -505,7 +525,7 @@ it("keeps both live mods if retirement cannot be saved atomically", async () => 
     await f.loop.settled();
     await vi.advanceTimersByTimeAsync(40000);
     await f.loop.settled();
-    expect(f.loop.build?.stage).toBe("LIVE");
+    expect(f.loop.build?.stage).toBe("SHOWCASE");
     expect(f.loop.store.mods()).toHaveLength(2);
     expect(f.host.world.state.mods["forge-1-1"]).toBeDefined();
     expect(f.host.world.state.mods["forge-1-2"]).toBeDefined();

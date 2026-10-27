@@ -12,6 +12,7 @@ export class ChatOut {
   constructor(
     private send: (message: string) => Promise<unknown>,
     private now = Date.now,
+    private delivered: (message: string, status: string) => void = () => {},
   ) {}
   enqueue(text: string, source: Source): boolean {
     if (source !== "twitch") return false;
@@ -40,6 +41,7 @@ export class ChatOut {
         .object({ data: z.array(z.object({ is_sent: z.boolean() })).min(1) })
         .parse(await this.send(message));
       this.status = data.data[0]!.is_sent ? "sent" : "Twitch dropped message";
+      this.delivered(message, this.status);
     } catch (error) {
       if (error instanceof TwitchError && error.status === 429) {
         this.next = this.now() + error.retryAfter;
