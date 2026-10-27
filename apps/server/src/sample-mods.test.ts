@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { World } from "../../../packages/engine/src/index.js";
 import { ModHost } from "./mod-host.js";
 import { gatekeeper } from "./gatekeeper.js";
-it("revalidates all three real M4 soak mods together with the spectacle policy", async () => {
+it("revalidates the historical M4 mods together under their original admission policy", async () => {
   const host = new ModHost(new World(2026));
   try {
     for (let i = 0; i < 40; i++)
@@ -23,7 +23,8 @@ it("revalidates all three real M4 soak mods together with the spectacle policy",
         source,
         checkpoint: host.checkpoint(),
         commands: saved.card.commands,
-        spectacle: true,
+        // Historical artifacts predate the new four-second showcase rule.
+        spectacle: false,
       });
       expect(report, JSON.stringify(report)).toMatchObject({
         ok: true,
