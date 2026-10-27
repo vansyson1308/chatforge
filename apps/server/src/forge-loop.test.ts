@@ -303,6 +303,9 @@ it("retries gate failures twice, emits FAILED and preserves last good game", asy
     expect(f.loop.build?.stage).toBe("FAILED");
     expect(f.host.world.hash()).toBe(before);
     expect(f.frames.some((v) => v.build?.stage === "FAILED")).toBe(true);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.loop.build?.stage).toBe("IDLE");
+    expect(f.loop.round?.stage).toBe("COLLECTING");
   } finally {
     await f.cleanup();
   }

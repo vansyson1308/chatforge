@@ -161,6 +161,8 @@ export class ForgeLoop {
   start(preset: "demo" | "normal"): void {
     this.preset = preset;
     this.running = true;
+    if (this.build && ["FAILED", "ROLLED_BACK"].includes(this.build.stage))
+      this.finishedAt = this.now();
     if (
       !this.round ||
       ["FAILED", "IDLE", "LIVE", "ROLLED_BACK"].includes(this.round.stage)
@@ -184,7 +186,8 @@ export class ForgeLoop {
   pulse(): void {
     if (!this.running) return;
     if (
-      this.build?.stage === "LIVE" &&
+      this.build &&
+      ["LIVE", "FAILED", "ROLLED_BACK"].includes(this.build.stage) &&
       this.finishedAt &&
       this.now() - this.finishedAt >= 5000
     )
@@ -503,6 +506,7 @@ export class ForgeLoop {
     if (rollback) {
       if (this.build && ["LIVE", "IDLE"].includes(this.build.stage)) {
         this.build.stage = "ROLLED_BACK";
+        this.finishedAt = this.now();
         this.store.save(this.build, this.now());
       }
       this.notice = "ROLLED BACK - restored previous game checkpoint";
