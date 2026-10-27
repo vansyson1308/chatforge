@@ -24,8 +24,14 @@ if (!key) {
     for (const id of ids) console.log(`  ${id}`);
     // These are candidates, not defaults; check them again against each account's list.
     for (const [variable, fallback] of [
-      ["PRODUCER_MODEL", "gpt-5.4-mini"],
-      ["BUILDER_MODEL", "gpt-5.3-codex"],
+      ["PRODUCER_MODEL", "gpt-6.1-terra"],
+      ["BUILDER_MODEL", "gpt-6.1-sol"],
+      ["CODEX_MODEL", "gpt-6.1-sol"],
+      ["MODERATION_MODEL", "omni-moderation-latest"],
+      ["ALTERNATE_MODEL", "gpt-6-astra"],
+      ["ALTERNATE_MODEL", "gpt-6-sol"],
+      ["ALTERNATE_MODEL", "gpt-6-luna"],
+      ["IMAGE_MODEL", "gpt-image-2"],
     ]) {
       const candidate = process.env[variable] || fallback;
       console.log(

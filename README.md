@@ -1,5 +1,7 @@
 # ChatForge
 
+[![CI](https://github.com/vansyson1308/chatforge/actions/workflows/ci.yml/badge.svg)](https://github.com/vansyson1308/chatforge/actions/workflows/ci.yml)
+
 ChatForge turns Twitch chat into a live game studio: viewers pitch and vote on ideas, then a Codex-powered Builder creates sandboxed game mods that can appear on stream, credited to their creators.
 
 **Status: under construction — M0 harness.** No product features are implemented yet.

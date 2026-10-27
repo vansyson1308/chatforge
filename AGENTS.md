@@ -4,8 +4,8 @@
 
 ## Milestones and status
 
-- M0 Harness: current milestone; complete only after green CI, a pushed commit and a journey entry.
-- M1 Engine, sandbox, seed game and Mod API.
+- M0 Harness: complete.
+- M1 Engine, sandbox, seed game and Mod API: current milestone.
 - M2 Twitch and Crowd Sim.
 - M3 Forge loop, AI, Gatekeeper and persistence.
 - M4 Overlay HUD, dashboard and game polish.
