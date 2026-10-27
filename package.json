@@ -1,0 +1,30 @@
+{
+  "name": "chatforge",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.18.2",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=10 <11"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "node scripts/e2e-unavailable.mjs",
+    "format": "prettier --write .",
+    "smoke:codex": "pnpm --filter @chatforge/server smoke:codex",
+    "smoke:openai": "pnpm --filter @chatforge/server smoke:openai"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.0",
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@chatforge/sandbox",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsc --watch --preserveWatchOutput",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "quickjs-emscripten": "^0.31.0"
+  }
+}
