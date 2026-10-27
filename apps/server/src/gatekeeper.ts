@@ -285,6 +285,50 @@ export async function gatekeeper(
           world.joinViewer(`Gate${i}`, `gate:${i}`, true);
         for (let tick = 0; tick < 900; tick++) {
           host.tick();
+          let showcaseEffects: ReturnType<typeof world.drainFx> = [];
+          if (input.spectacle && tick === 120) {
+            const command = test.commands?.[0];
+            const event = command ? undefined : test.events?.[0];
+            if (
+              command
+                ? !host.commands(input.modId).includes(command)
+                : !event || !host.events(input.modId).includes(event)
+            )
+              throw Error(
+                "forgeTest must name a registered showcase command or event",
+              );
+            const beforeIds = new Set(
+              world.state.entities.map((entity) => entity.id),
+            );
+            const beforeGear = new Map(
+              world.state.entities.map((entity) => [
+                entity.id,
+                `${entity.weapon ?? ""}:${entity.hat ?? ""}`,
+              ]),
+            );
+            const beforeFx = world.drainFx();
+            host.showcase(input.modId, command, event);
+            const triggered = world.drainFx();
+            const visible = triggered.some(
+              (effect) =>
+                effect.modId === input.modId &&
+                !["banner", "text"].includes(effect.type) &&
+                (Number(effect.count) > 0 || Number(effect.ticks) > 0),
+            );
+            const changed = world.state.entities.some(
+              (entity) =>
+                (!beforeIds.has(entity.id) &&
+                  entity.tags.includes(`mod:${input.modId}`)) ||
+                (beforeGear.has(entity.id) &&
+                  beforeGear.get(entity.id) !==
+                    `${entity.weapon ?? ""}:${entity.hat ?? ""}`),
+            );
+            if (!visible && !changed)
+              throw Error(
+                "Showcase command must immediately create a visible effect, entity or equipment change at four seconds; a cooldown banner alone is not enough",
+              );
+            showcaseEffects = [...beforeFx, ...triggered];
+          }
           if (tick >= 300 && tick % 150 === 0) {
             for (const type of new Set([
               "wave_start",
@@ -352,7 +396,7 @@ export async function gatekeeper(
               last = tick;
             }
           }
-          for (const effect of world.drainFx())
+          for (const effect of [...showcaseEffects, ...world.drainFx()])
             if (effect.modId === input.modId) {
               const visible =
                 effect.type === "banner"

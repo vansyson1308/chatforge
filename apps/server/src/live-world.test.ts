@@ -87,7 +87,7 @@ it("rejects particles-only output at the spectacle gate", async () => {
   const report = await gatekeeper({
     modId: "subtle",
     source:
-      "export function register(api){api.registerCommand('!tiny',()=>api.fx.particles(500,500,'#ffffff',3),{cooldownSec:1})} export const forgeTest={expect:{fx:['particles']}}",
+      "export function register(api){api.registerCommand('!tiny',()=>api.fx.particles(500,500,'#ffffff',3),{cooldownSec:1})} export const forgeTest={commands:['!tiny'],expect:{fx:['particles']}}",
     checkpoint: new World().snapshot(),
     commands: ["!tiny"],
     spectacle: true,
@@ -121,6 +121,23 @@ it("requires canonical simulated attribution in generated banners", async () => 
   expect(repeated.ok).toBe(false);
   expect(repeated.checks.at(-1)?.detail).toContain("must be followed by (SIM)");
 }, 30000);
+it("rejects a showcase that only reports cooldown while a mod is active", async () => {
+  const source = goodMod.replace(
+    "if (api.state.active) { api.fx.ring(600,510,100,'#ffd347',30); return; }",
+    "if (api.state.active) return;",
+  );
+  const report = await gatekeeper({
+    modId: "showcase-check",
+    source,
+    checkpoint: new World().snapshot(),
+    commands: ["!spark"],
+    spectacle: true,
+  });
+  expect(report.ok).toBe(false);
+  expect(report.checks.at(-1)?.detail).toContain(
+    "Showcase command must immediately",
+  );
+});
 it("marches waves along the ground, damages/rebuilds the keep and presents a fifth-wave boss", () => {
   const world = new World(77);
   world.state.wave = 4;

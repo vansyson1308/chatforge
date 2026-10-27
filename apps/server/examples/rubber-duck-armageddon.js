@@ -26,7 +26,10 @@ export function register(api) {
     scale: 2,
   });
   function begin() {
-    if (api.state.active) return;
+    if (api.state.active) {
+      api.fx.ring(600, 510, 100, "#ffd347", 30);
+      return;
+    }
     api.state.active = true;
     api.fx.sky("storm", 9);
     api.fx.banner("RUBBER DUCK ARMAGEDDON — forged by the community");

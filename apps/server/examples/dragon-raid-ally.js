@@ -28,7 +28,10 @@ export function register(api) {
   });
   api.defineHat("dragon-crown", dragon);
   function summon() {
-    if (api.state.active) return;
+    if (api.state.active) {
+      api.fx.ring(760, 520, 100, "#76dcab", 30);
+      return;
+    }
     api.state.active = true;
     api.fx.sky("aurora", 12);
     api.fx.banner("DRAGON RAID ALLY — thanks, community!");

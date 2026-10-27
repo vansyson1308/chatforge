@@ -314,7 +314,7 @@ export class WorkspaceBuilder implements Builder {
           : client.startThread(options);
         const prompt = request.report
           ? `Repair ONLY mods/${request.modId}.js. Gatekeeper report:\n${JSON.stringify(request.report)}\nRun node forge-test.mjs mods/${request.modId}.js until green.`
-          : `Implement card.json in ONLY mods/${request.modId}.js. Follow this workspace AGENTS.md and MOD_API.md. ${testContract} Include a registered command or event in forgeTest. The first forgeTest command or event is triggered for a live showcase four seconds after deployment: make it visibly act even if the automatic introduction is already running. Read files with PowerShell on Windows (no bash). Run node forge-test.mjs mods/${request.modId}.js. Keep it focused and finish quickly; do not narrate a plan.`;
+          : `Implement card.json in ONLY mods/${request.modId}.js. Follow this workspace AGENTS.md and MOD_API.md. ${testContract} Include a registered command or event in forgeTest. The first forgeTest command or event is triggered for a live showcase four seconds after deployment: its callback must immediately create a visible non-text FX, spawn an entity, or change a hero's equipment even if the automatic introduction is already running. A cooldown banner alone fails. Read files with PowerShell on Windows (no bash). Run node forge-test.mjs mods/${request.modId}.js. Keep it focused and finish quickly; do not narrate a plan.`;
         const { events } = await this.thread.runStreamed(prompt, {
           signal: request.signal,
         });

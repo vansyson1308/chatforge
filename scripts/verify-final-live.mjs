@@ -31,6 +31,7 @@ assert.equal(
   "Twitch login must already be healthy",
 );
 assert.equal(initial.eventsub.state, "connected", "EventSub must be connected");
+assert.equal(initial.eventsub.subscriptions.find((entry) => entry.type === "channel.chat.message")?.status, "enabled", "Chat EventSub must be enabled");
 assert(
   initial.config.sources.includes("twitch") &&
     initial.config.sources.includes("simulator"),
