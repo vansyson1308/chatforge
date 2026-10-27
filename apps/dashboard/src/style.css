@@ -1,0 +1,149 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    "Segoe UI", "Microsoft YaHei", "Yu Gothic", "Noto Sans", sans-serif;
+  background: #101820;
+  color: #e5e9ed;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1240px;
+  margin: auto;
+  padding: 36px 24px;
+}
+h1 {
+  font-size: 42px;
+  margin: 8px 0;
+}
+h2 {
+  font-size: 21px;
+  margin-top: 0;
+}
+p {
+  line-height: 1.6;
+}
+.eyebrow {
+  color: #ffb36b;
+  letter-spacing: 0.13em;
+  font-size: 12px;
+}
+section {
+  background: #19232d;
+  border: 1px solid #34414d;
+  padding: 24px;
+  margin-top: 24px;
+  border-radius: 8px;
+}
+a {
+  color: #ffc183;
+}
+button,
+.button {
+  display: inline-block;
+  background: #e8a35f;
+  color: #17202b;
+  border: 0;
+  border-radius: 5px;
+  padding: 11px 15px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+:focus-visible {
+  outline: 3px solid #90c9ff;
+  outline-offset: 4px;
+}
+select {
+  font: inherit;
+  padding: 8px;
+  margin-left: 8px;
+  background: #101820;
+  color: inherit;
+  border: 1px solid #6b7780;
+  border-radius: 4px;
+}
+.row {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+dl {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+}
+dd {
+  margin: 0;
+}
+dt,
+.muted,
+small,
+time {
+  color: #afbcc7;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+caption {
+  text-align: left;
+  padding: 10px 0;
+  color: #afbcc7;
+}
+th,
+td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #3d4b58;
+  overflow-wrap: anywhere;
+}
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.feed {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 540px;
+  overflow: auto;
+}
+.feed li {
+  border-bottom: 1px solid #3d4b58;
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+}
+.feed p {
+  margin: 6px 0;
+}
+.tag {
+  display: inline-block;
+  background: #293c53;
+  color: #b4d8ff;
+  font-size: 11px;
+  padding: 3px 6px;
+  margin-right: 10px;
+  border-radius: 3px;
+}
+@media (max-width: 850px) {
+  .columns {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  main {
+    padding: 24px 12px;
+  }
+  section {
+    padding: 16px;
+  }
+}

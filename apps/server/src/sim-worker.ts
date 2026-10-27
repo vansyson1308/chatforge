@@ -34,6 +34,7 @@ const send = () => {
       e.viewer ?? "",
       e.level,
       e.lastActiveTick ?? 0,
+      e.simulated ?? false,
     ]),
     fx: fx.slice(-2000),
     sprites: host.sprites(),
@@ -65,12 +66,22 @@ port.on(
             break;
           }
           case "join":
-            world.joinViewer(String(message.viewer ?? ""));
+            world.joinViewer(
+              String(message.viewer ?? ""),
+              typeof message.userId === "string"
+                ? `${String(message.source)}:${message.userId}`
+                : undefined,
+              message.source === "simulator",
+            );
             break;
           case "event":
             host.dispatch({
               type: String(message.event ?? ""),
               viewer: String(message.viewer ?? "").slice(0, 40),
+              userId: String(message.userId ?? ""),
+              source: String(message.source ?? "development"),
+              count: Number(message.count ?? 1),
+              detail: String(message.detail ?? ""),
             });
             break;
           case "command":

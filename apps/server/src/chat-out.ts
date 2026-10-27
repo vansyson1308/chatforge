@@ -1,0 +1,52 @@
+import { z } from "zod";
+import type { Source } from "../../../packages/shared/src/chat.js";
+import { sanitize } from "./chat-router.js";
+import { TwitchError } from "./twitch-auth.js";
+
+export class ChatOut {
+  private queue: string[] = [];
+  private seen = new Map<string, number>();
+  private next = 0;
+  private busy = false;
+  status = "idle";
+  constructor(
+    private send: (message: string) => Promise<unknown>,
+    private now = Date.now,
+  ) {}
+  enqueue(text: string, source: Source): boolean {
+    if (source !== "twitch") return false;
+    const message = `? ${sanitize(text, 498)}`;
+    const now = this.now();
+    for (const [key, expiry] of this.seen)
+      if (expiry <= now) this.seen.delete(key);
+    if (this.seen.has(message) || this.queue.length >= 20) return false;
+    this.seen.set(message, now + 60000);
+    this.queue.push(message);
+    this.status = `queued (${this.queue.length})`;
+    return true;
+  }
+  clear(): void {
+    this.queue = [];
+    this.status = "idle";
+  }
+  async tick(): Promise<void> {
+    if (this.busy || this.now() < this.next || !this.queue.length) return;
+    const message = this.queue.shift()!;
+    this.busy = true;
+    this.next = this.now() + 1600; // <20 messages / 30 seconds; one channel.
+    try {
+      const data = z
+        .object({ data: z.array(z.object({ is_sent: z.boolean() })).min(1) })
+        .parse(await this.send(message));
+      this.status = data.data[0]!.is_sent ? "sent" : "Twitch dropped message";
+    } catch (error) {
+      if (error instanceof TwitchError && error.status === 429) {
+        this.next = this.now() + error.retryAfter;
+        this.queue.unshift(message);
+        this.status = "rate limited; waiting";
+      } else this.status = "send failed; check Twitch connection";
+    } finally {
+      this.busy = false;
+    }
+  }
+}

@@ -23,8 +23,8 @@ flowchart LR
   Builder --> Gate[Gatekeeper: static checks and headless simulation]
   Gate --> Server
   Server --> DB[(SQLite in runtime)]
-  Server <-->|WebSocket snapshots and events| Overlay[OBS overlay: Canvas2D and HUD]
-  Server <-->|WebSocket| Dashboard[React dashboard]
+  Server -->|Read-only WebSocket snapshots| Overlay[OBS overlay: Canvas2D and HUD]
+  Server <-->|Local HTTP controls + status polling| Dashboard[React dashboard]
   Server --> Worker[Simulation worker thread]
   Worker --> Engine[Deterministic engine]
   Gate --> Engine
@@ -53,6 +53,34 @@ flowchart LR
   World -->|20 Hz render fields| Overlay[Canvas renderer]
 ```
 
-`register` is declarations only. Named schedules replace delayed closures. The snapshot includes mod-set version, source for each mod, declaration tick, JSON state, repeating timer phase, pending named schedules and command cooldowns. Checkpoints happen before deployments and every ten simulated seconds; error diagnostics live outside simulation state, preserving exact rollback hashes. Explicit `rollbackToLastGood()` restores the periodic checkpoint. SQLite persistence and Gatekeeper admission remain M3.
+`register` is declarations only. Named schedules replace delayed closures. The snapshot includes mod-set version, source for each mod, declaration tick, JSON state, repeating timer phase, pending named schedules and command cooldowns. Checkpoints happen before deployments and every ten simulated seconds; error diagnostics live outside simulation state, preserving exact rollback hashes. Explicit `rollbackToLastGood()` restores the periodic checkpoint. Full world/round persistence and Gatekeeper admission remain M3; M2 persists ideas and EventSub receipt IDs only.
+
+## M2 Twitch and Crowd Sim
+
+```mermaid
+flowchart LR
+  Human[Human OAuth consent] --> Auth[Code grant + validate + refresh]
+  Auth --> Tokens[Ignored local token file]
+  Twitch[EventSub WebSocket] --> Dedupe[Validate envelopes + receipt dedupe]
+  Dedupe --> Sources[Source-tagged domain events]
+  Crowd[Seeded Crowd Sim] --> Sources
+  Sources --> Router[Sanitizer + command router + cooldowns]
+  Router --> Ideas[(SQLite Idea Inbox)]
+  Router --> Worker[Simulation worker / ModHost]
+  Router --> Out[Source-aware outbound queue]
+  Out -->|Twitch-origin replies only| Helix[Helix Send Chat Message]
+  Worker -->|Render tuples with SIM provenance| Overlay[Canvas overlay]
+  Dashboard[React dashboard] <-->|Local JSON HTTP| Status[Connection + capabilities + log + inbox]
+```
+
+`TwitchAuth` owns a browser-bound five-minute single-use state, code exchange, `/users` identity lookup and atomic token storage. Startup/hourly validation checks client ID, user ID and granted scopes; a minute maintenance loop proactively refreshes near expiry, and Helix retries once after a 401. Concurrent refresh calls share one request. Failure/revocation ends the EventSub connection and clears pending outbound chat, leaving the game running with a reconnect prompt. The streamer's account is the broadcaster and bot.
+
+`EventSub` creates all seven subscriptions immediately after a new welcome. A Twitch-requested reconnect opens the supplied URL, retains the old connection until the new welcome, and transfers existing subscriptions. Unexpected close/keepalive timeout reconnects with bounded exponential backoff and creates fresh subscriptions. Per-type API refusals remain visible without taking down other types. Receipt IDs are persisted before routing; duplicate IDs are ignored across handoff, source toggles and process restarts. A ten-minute timestamp window bounds replay history; expired receipts are pruned on incoming traffic. Twitch does not replay events missed during a disconnected session.
+
+Both sources emit shared Zod domain shapes. Chat identities use source + user ID, not display names; engine checkpoints and queued viewers preserve that identity and SIM provenance. Names remain display-only. Events forward sanitized viewer, source, user ID, count and subtype into the existing ModHost bus. Commands unknown to the registered mods have no effect. `!idea` writes a pending row to SQLite and a bounded memory inbox; `!vote` retains preview choices without pretending M3 rounds exist. The router exposes `resetRound()` for M3. Input cooldowns and the 200-idea round limit are separate from Mod API cooldowns.
+
+Crowd Sim has 20 personas, 80 buildable ideas and 10 deliberately bad moderation fixtures. Seeded selection is deterministic; intensity changes only pacing (4000/1200/250 ms). SIM appears in dashboard logs/inbox, hero labels, persistent small hero markers and simulated event/command credits. Simulated replies are logged locally and rejected by the real outbound queue. The queue prefixes `?` exactly as requested, caps at 500 Unicode code points, suppresses identical messages for 60 seconds, bounds pending messages at 20 and spaces sends by 1600 ms. HTTP 429 respects the later of Twitch's reset time and a 30-second retry delay. API refusal/drop results are displayed without exposing response bodies.
+
+The React dashboard polls a bounded status payload once a second, cleans up polling on unmount, and sends source/intensity/auto-join changes through JSON POST. This is the functional M2 control surface; M4 owns the visual polish pass. `pnpm start` serves both built apps from the same loopback server; `pnpm dev` also starts Vite on 5173/5174. The overlay socket remains read-only and exposes no OAuth or chat administration. See [LIVE_TEST.md](LIVE_TEST.md) for the intentionally human-only OAuth hand-off and official Twitch references.
 
 M1's isolated performance suite measures 300 entities, three active example mods, scheduled events and periodic checkpoints for 900 measured ticks after 120 warm-up ticks. Local limits: average ≤3 ms, p99 ≤10 ms, max ≤25 ms; CI scales each limit by three. Unit/security tests also run sequentially to reduce scheduling contention. Sandbox limits use thread CPU time with a secondary wall deadline; performance gates always use elapsed wall time. Browser FPS is a separate local installed-Chrome gate, with at least 300 durable test heroes for the entire ten-second sample.

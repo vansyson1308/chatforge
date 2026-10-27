@@ -4,7 +4,7 @@
 
 ChatForge turns Twitch chat into a live game studio: viewers pitch and vote on ideas, then a Codex-powered Builder creates sandboxed game mods that can appear on stream, credited to their creators.
 
-**Status: under construction — M1 complete.** Forge Keep has a deterministic simulation, bounded QuickJS mods, checkpoint rollback and a Canvas overlay. Twitch integration is next (M2); the live AI forge loop arrives in M3.
+**Status: under construction - M2 complete.** Forge Keep has a deterministic simulation, bounded QuickJS mods, checkpoint rollback and a Canvas overlay. Twitch OAuth/EventSub, chat commands, a persisted Idea Inbox and visibly labeled Crowd Sim are implemented. The live AI forge loop arrives in M3; human Twitch verification follows [LIVE_TEST.md](docs/LIVE_TEST.md).
 
 ## Quick start
 
@@ -13,14 +13,18 @@ Requires Node 24 and pnpm 10. In PowerShell:
 ```powershell
 corepack enable
 pnpm install --frozen-lockfile
-Copy-Item .env.example .env
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
 ```
 
-`pnpm dev` builds the workspace and starts the localhost simulation and overlay at `http://127.0.0.1:5173/`. Press J to join a viewer, S for a fake sub, R for a fake raid, and M to toggle the meteor example. `?mode=overlay` selects the transparent bottom-band view. The development endpoints are localhost-only and are not intended for production. Configure `.env` locally for future integrations. Run `pnpm smoke:codex` and `pnpm smoke:openai` to check the AI prerequisites. `pnpm test:e2e` intentionally reports unavailable until M5. See [the brief](brief/CHATFORGE_BRIEF.md) and [architecture](docs/ARCHITECTURE.md).
+`pnpm start` serves the built [dashboard](http://localhost:3000/dashboard/) and [overlay](http://localhost:3000/overlay/) on one loopback server. `pnpm dev` builds and starts the same server plus Vite overlay (5173) and dashboard (5174). Use localhost consistently for OAuth; login on 127.0.0.1 redirects to the registered callback host before creating its cookie. `?mode=overlay` selects the transparent bottom-band view for OBS.
+
+Set `CHAT_SOURCE=simulator`, `twitch`, or `twitch,simulator` in `.env`; source/intensity/auto-join controls also work in the dashboard for the current process. Crowd Sim uses 20 personas and 80 feature ideas plus 10 intentionally bad moderation fixtures. SIM tags are mandatory and simulated activity never posts into Twitch chat. `!idea` fills a pending inbox, `!vote` records preview choices; actual rounds and moderation are M3. Connect Twitch using the human steps in [LIVE_TEST.md](docs/LIVE_TEST.md). A non-affiliate channel can use chat/follow/raid while sub/Bits capabilities may be refused or idle.
+
+Run `pnpm smoke:codex` and `pnpm smoke:openai` for AI prerequisites. `pnpm test:e2e` intentionally reports unavailable until M5. See [the brief](brief/CHATFORGE_BRIEF.md) and [architecture](docs/ARCHITECTURE.md).
 
 ## M1 verification
 

@@ -35,6 +35,8 @@ export interface Entity {
   kills: number;
   tags: string[];
   viewer?: string;
+  viewerId?: string;
+  simulated?: boolean;
   lastActiveTick?: number;
   ownerId?: number;
   lifetime?: number;
@@ -71,7 +73,7 @@ export interface WorldState {
   keepHp: number;
   rules: Rules;
   entities: Entity[];
-  queue: string[];
+  queue: (string | { name: string; userId: string; simulated: boolean })[];
   pendingEnemies: number;
   spawnCountdown: number;
   events: Event[];
@@ -251,15 +253,19 @@ export class World {
     this.byId.set(entity.id, entity);
     return entity;
   }
-  joinViewer(name: string): Entity | null {
+  joinViewer(name: string, userId?: string, simulated = false): Entity | null {
     const viewer = name.trim().slice(0, 40);
     if (!viewer) throw new Error("Viewer name is empty");
     const found = this.state.entities.find(
       (e) =>
-        e.team === "hero" && e.viewer?.toLowerCase() === viewer.toLowerCase(),
+        e.team === "hero" &&
+        (userId
+          ? e.viewerId === userId
+          : !e.viewerId && e.viewer?.toLowerCase() === viewer.toLowerCase()),
     );
     if (found) {
       found.lastActiveTick = this.state.tick;
+      found.viewer = viewer;
       return found;
     }
     if (
@@ -267,9 +273,16 @@ export class World {
       this.state.rules.maxHeroes
     ) {
       if (
-        !this.state.queue.some((v) => v.toLowerCase() === viewer.toLowerCase())
+        this.state.queue.length < 1000 &&
+        !this.state.queue.some((v) =>
+          typeof v === "string"
+            ? !userId && v.toLowerCase() === viewer.toLowerCase()
+            : v.userId === userId,
+        )
       )
-        this.state.queue.push(viewer);
+        this.state.queue.push(
+          userId ? { name: viewer, userId, simulated } : viewer,
+        );
       return null;
     }
     const hero = this.spawn({
@@ -284,6 +297,10 @@ export class World {
       behavior: "guard",
       viewer,
     });
+    if (userId) {
+      hero.viewerId = userId;
+      hero.simulated = simulated;
+    }
     this.state.events.push({ type: "hero_join", entityId: hero.id, viewer });
     return hero;
   }
@@ -557,7 +574,10 @@ export class World {
         state.rules.maxHeroes
     ) {
       const next = state.queue.shift();
-      if (next) this.joinViewer(next);
+      if (next) {
+        if (typeof next === "string") this.joinViewer(next);
+        else this.joinViewer(next.name, next.userId, next.simulated);
+      }
     }
   }
 }

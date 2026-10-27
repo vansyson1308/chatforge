@@ -5,9 +5,12 @@ import {
 } from "node:http";
 import { Worker } from "node:worker_threads";
 import { readFile, readdir, stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, extname, sep } from "node:path";
+import { randomBytes } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import { config } from "dotenv";
+import { Audience } from "./audience.js";
+import { localRequest, localOrigins } from "./local-http.js";
 
 config({ path: resolve(process.cwd(), "../../.env"), quiet: true });
 const port = Number(process.env.PORT ?? 3000);
@@ -66,7 +69,10 @@ function body(req: IncomingMessage): Promise<unknown> {
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
       content += chunk;
-      if (content.length > 110000) req.destroy();
+      if (content.length > 110000) {
+        reject(new Error("Body too large"));
+        req.destroy();
+      }
     });
     req.on("end", () => {
       try {
@@ -78,16 +84,147 @@ function body(req: IncomingMessage): Promise<unknown> {
     req.on("error", reject);
   });
 }
+const root = resolve(process.cwd(), "../..");
+const audience = await Audience.create(root, process.env, sendCommand);
 const server = createServer(async (req, res) => {
+  // OAuth navigation crosses hosts; state + browser cookie secure the callback.
+  const url = new URL(req.url ?? "/", `http://localhost:${port}`);
+  const isCallback =
+    url.pathname === "/auth/twitch/callback" && req.method === "GET";
+  const isOAuthNavigation =
+    req.method === "GET" &&
+    ["/auth/twitch/login", "/auth/twitch/callback"].includes(url.pathname) &&
+    (!req.headers["sec-fetch-mode"] ||
+      req.headers["sec-fetch-mode"] === "navigate");
+  const check = isOAuthNavigation
+    ? {
+        headers: { ...req.headers, "sec-fetch-site": undefined },
+        socket: req.socket,
+      }
+    : req;
+  if (!localRequest(check, port)) {
+    json(res, 403, { error: "Local access only" });
+    return;
+  }
+  if (req.headers.origin && localOrigins(port).has(req.headers.origin))
+    res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Cache-Control", "no-store");
+  if (req.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
+    res.writeHead(204, {
+      "Access-Control-Allow-Methods": "GET, POST",
+      "Access-Control-Allow-Headers": "content-type",
+    });
+    res.end();
+    return;
+  }
+  try {
+    if (req.method === "GET" && url.pathname === "/auth/twitch/login") {
+      // Keep the browser-bound state cookie on the registered callback host.
+      if (`http://${req.headers.host}` !== audience.auth.callbackOrigin) {
+        res.writeHead(302, {
+          Location: `${audience.auth.callbackOrigin}/auth/twitch/login`,
+        });
+        res.end();
+        return;
+      }
+      const browser = randomBytes(32).toString("hex");
+      const location = audience.auth.login(browser);
+      res.writeHead(302, {
+        Location: location,
+        "Set-Cookie": `chatforge_oauth=${browser}; HttpOnly; SameSite=Lax; Path=/auth/twitch; Max-Age=300`,
+      });
+      res.end();
+      return;
+    }
+    if (isCallback) {
+      const browser =
+        req.headers.cookie
+          ?.split("; ")
+          .find((c) => c.startsWith("chatforge_oauth="))
+          ?.slice(16) ?? "";
+      await audience.auth.callback(
+        url.searchParams.get("code") ?? "",
+        url.searchParams.get("state") ?? "",
+        browser,
+      );
+      audience.configure(audience.config);
+      res.writeHead(302, {
+        Location: "/dashboard/",
+        "Set-Cookie":
+          "chatforge_oauth=; HttpOnly; SameSite=Lax; Path=/auth/twitch; Max-Age=0",
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/status") {
+      json(res, 200, audience.status());
+      return;
+    }
+    if (url.pathname.startsWith("/api/")) {
+      if (req.method !== "POST" || !localRequest(req, port, true)) {
+        json(res, 403, { error: "Forbidden" });
+        return;
+      }
+      if (url.pathname === "/api/config") {
+        audience.configure(await body(req));
+        json(res, 200, { ok: true });
+      } else if (url.pathname === "/api/chat/test")
+        json(res, 200, { queued: audience.testMessage() });
+      else json(res, 404, { error: "Not found" });
+      return;
+    }
+    if (
+      req.method === "GET" &&
+      (url.pathname === "/" ||
+        url.pathname.startsWith("/dashboard/") ||
+        url.pathname.startsWith("/overlay/"))
+    ) {
+      if (url.pathname === "/") {
+        res.writeHead(302, { Location: "/dashboard/" });
+        res.end();
+        return;
+      }
+      const app = url.pathname.startsWith("/overlay/")
+        ? "overlay"
+        : "dashboard";
+      const directory = resolve(root, `apps/${app}/dist`);
+      const relative =
+        decodeURIComponent(url.pathname.slice(app.length + 2)) || "index.html";
+      const file = resolve(directory, relative);
+      if (!file.startsWith(directory + sep)) throw new Error("Invalid path");
+      const mime: Record<string, string> = {
+        ".html": "text/html; charset=utf-8",
+        ".js": "text/javascript",
+        ".css": "text/css",
+        ".png": "image/png",
+        ".svg": "image/svg+xml",
+      };
+      if (!mime[extname(file)]) throw new Error("Unsupported asset");
+      const data = await readFile(file);
+      res.writeHead(200, {
+        "Content-Type": mime[extname(file)]!,
+        "Content-Security-Policy":
+          "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://localhost:* ws://127.0.0.1:*; frame-ancestors 'self'",
+      });
+      res.end(data);
+      return;
+    }
+  } catch {
+    json(res, 400, {
+      error: isCallback
+        ? "Twitch login failed: invalid/expired state or authorization. Reconnect Twitch."
+        : "Request failed; check configuration and connection",
+    });
+    return;
+  }
   if (req.method === "GET" && req.url === "/health") {
     json(res, 200, { ok: true });
     return;
   }
   const origin = req.headers.origin;
-  const allowedOrigins = new Set([
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-  ]);
+  const allowedOrigins = localOrigins(port);
   if (
     process.env.NODE_ENV !== "production" &&
     req.method === "OPTIONS" &&
@@ -140,9 +277,14 @@ const server = createServer(async (req, res) => {
     });
   }
 });
-const sockets = new WebSocketServer({ server });
+const sockets = new WebSocketServer({
+  server,
+  maxPayload: 1024,
+  verifyClient: ({ req }: { req: IncomingMessage }) => localRequest(req, port),
+});
 sockets.on("connection", (socket) => {
   if (lastSnapshot) socket.send(lastSnapshot);
+  socket.on("message", () => socket.close(1008, "Read-only overlay"));
 });
 worker.on(
   "message",
@@ -173,6 +315,12 @@ worker.on("error", (error) => {
 async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
+  audience.stop();
+  for (const pending of requests.values()) {
+    clearTimeout(pending.timer);
+    pending.reject(new Error("Server stopping"));
+  }
+  requests.clear();
   server.close();
   for (const client of sockets.clients) client.close();
   sockets.close();
@@ -207,5 +355,6 @@ server.listen(port, "127.0.0.1", () => {
         console.error(`Could not load mod ${id}:`, error);
       }
     }
+    if (!stopping) await audience.start();
   })();
 });

@@ -13,6 +13,7 @@ type Entity = {
   viewer?: string;
   level: number;
   joined: number;
+  simulated?: boolean;
 };
 type Fx = { type: string; [key: string]: string | number | boolean };
 type Sprite = { grid: string[]; palette: Record<string, string> };
@@ -47,7 +48,9 @@ let oldEntities = new Map<number, Entity>();
 let sortedEntities: Entity[] = [];
 
 function connect(): void {
-  const socket = new WebSocket(`ws://${location.hostname}:3000`);
+  const socket = new WebSocket(
+    `ws://${location.hostname}:${location.port === "5173" ? "3000" : location.port}`,
+  );
   socket.onopen = () => {
     connected = true;
   };
@@ -69,7 +72,7 @@ function connect(): void {
           cycle: wire.cycle,
           keepHp: wire.keepHp,
           entities: wire.entities.map(
-            ([id, kind, team, x, y, hp, maxHp, viewer, level, joined]) => ({
+            ([
               id,
               kind,
               team,
@@ -80,6 +83,19 @@ function connect(): void {
               viewer,
               level,
               joined,
+              simulated,
+            ]) => ({
+              id,
+              kind,
+              team,
+              x,
+              y,
+              hp,
+              maxHp,
+              viewer,
+              level,
+              joined,
+              simulated,
             }),
           ),
         },
@@ -354,13 +370,24 @@ function render(time: number): void {
     ctx.ellipse(x, y + 8, size * 0.45, 7, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.drawImage(sprite, x - size / 2, y - size, size, size);
+    // Honest provenance stays visible even when collision avoidance hides a name.
+    if (entity.simulated) {
+      ctx.fillStyle = "#18202f";
+      ctx.fillRect(x - 11, y + 3, 22, 12);
+      ctx.font = "bold 9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#aad4ff";
+      ctx.fillText("SIM", x, y + 12);
+    }
     if (entity.viewer) {
-      ctx.font = "bold 12px sans-serif";
+      ctx.font =
+        'bold 12px "Segoe UI", "Microsoft YaHei", "Yu Gothic", "Noto Sans", sans-serif';
+      const viewerLabel = `${entity.simulated ? "SIM · " : ""}${entity.viewer}`;
       labels.push({
-        text: entity.viewer,
+        text: viewerLabel,
         x,
         y: y - size - 10,
-        width: ctx.measureText(entity.viewer).width + 10,
+        width: ctx.measureText(viewerLabel).width + 10,
         height: 18,
         priority:
           (credit.includes(entity.viewer) ? 1e9 : 0) +
@@ -398,7 +425,8 @@ function render(time: number): void {
       label.height,
     );
     ctx.textAlign = "center";
-    ctx.font = "bold 12px sans-serif";
+    ctx.font =
+      'bold 12px "Segoe UI", "Microsoft YaHei", "Yu Gothic", "Noto Sans", sans-serif';
     ctx.fillStyle = "#f9e8c6";
     ctx.fillText(label.text, label.x, label.y + 4);
   }

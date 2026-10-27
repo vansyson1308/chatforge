@@ -1,5 +1,5 @@
 import { z } from "zod";
-/** id, kind, team, x, y, hp, maxHp, viewer, level, joined tick. Render fields only. */
+/** id, kind, team, x, y, hp, maxHp, viewer, level, joined tick, simulated. */
 export const renderEntitySchema = z.tuple([
   z.number().int().positive(),
   z.string().max(40),
@@ -11,6 +11,7 @@ export const renderEntitySchema = z.tuple([
   z.string().max(40),
   z.number().int(),
   z.number().int(),
+  z.boolean().optional(),
 ]);
 export const renderSnapshotSchema = z.object({
   type: z.literal("snapshot"),
