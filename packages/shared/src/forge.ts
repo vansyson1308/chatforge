@@ -6,6 +6,16 @@ export const creditSchema = z.object({
   source: z.enum(["twitch", "simulator"]),
 });
 export const cardSchema = z.object({
+  ideaIds: z.array(z.number().int()).max(200).optional(),
+  spectacle: z
+    .object({
+      visibleWithinSeconds: z.number().min(0).max(10),
+      chatInvolvement: z.boolean(),
+      customSprite: z.boolean(),
+      timedEvent: z.boolean(),
+      score: z.number().min(0).max(10),
+    })
+    .optional(),
   title: z.string().min(1).max(40),
   pitch: z.string().min(1).max(120),
   visualHook: z.string().min(1).max(240),
@@ -50,6 +60,13 @@ export const forgeTestSchema = z
               "particles",
               "tint",
               "weather",
+              "text",
+              "ring",
+              "beam",
+              "lightning",
+              "flash",
+              "trail",
+              "sky",
             ]),
           )
           .max(8)
@@ -76,6 +93,15 @@ export const stageSchema = z.enum([
 ]);
 export type ForgeStage = z.infer<typeof stageSchema>;
 export interface GateReport {
+  spectacle?: {
+    score: number;
+    fxTypes: number;
+    sprites: number;
+    entities: number;
+    commands: number;
+    durationSeconds: number;
+  };
+  hostFailure?: boolean;
   ok: boolean;
   checks: { name: string; ok: boolean; detail: string }[];
   hashes: string[];
@@ -98,6 +124,8 @@ export interface ForgeRound {
   report: GateReport | null;
 }
 export interface ForgeView {
+  patches?: {id:string;title:string;credits:ForgeCard['credits']}[];
+  ideas?: { author: string; text: string; source: string }[];
   type: "forge";
   running: boolean;
   preset: "demo" | "normal";
@@ -112,6 +140,17 @@ export interface ForgeView {
   now: number;
 }
 const gateReportSchema = z.object({
+  spectacle: z
+    .object({
+      score: z.number(),
+      fxTypes: z.number(),
+      sprites: z.number(),
+      entities: z.number(),
+      commands: z.number(),
+      durationSeconds: z.number(),
+    })
+    .optional(),
+  hostFailure: z.boolean().optional(),
   ok: z.boolean(),
   checks: z
     .array(z.object({ name: z.string(), ok: z.boolean(), detail: z.string() }))
@@ -136,6 +175,13 @@ const roundSchema = z.object({
   report: gateReportSchema.nullable(),
 });
 export const forgeViewSchema = z.object({
+  patches:z.array(z.object({id:z.string(),title:z.string(),credits:z.array(creditSchema)})).optional(),
+  ideas: z
+    .array(
+      z.object({ author: z.string(), text: z.string(), source: z.string() }),
+    )
+    .max(4)
+    .optional(),
   type: z.literal("forge"),
   running: z.boolean(),
   preset: z.enum(["demo", "normal"]),

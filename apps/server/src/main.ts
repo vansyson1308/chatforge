@@ -124,6 +124,11 @@ const forge = new ForgeLoop(audience.inbox, {
     },
   },
   gate: runGate,
+  diagnostic: (error) =>
+    console.error(
+      "Forge diagnostic:",
+      error instanceof Error ? error.name : "Unknown error",
+    ),
   broadcast: (view) => {
     const data = JSON.stringify(view);
     for (const client of sockets.clients)

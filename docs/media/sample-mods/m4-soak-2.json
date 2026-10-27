@@ -1,0 +1,136 @@
+{
+  "round": 2,
+  "card": {
+    "spectacle": {
+      "visibleWithinSeconds": 2,
+      "chatInvolvement": true,
+      "customSprite": true,
+      "timedEvent": true,
+      "score": 10
+    },
+    "title": "Marshmallow Mayhem",
+    "pitch": "A sweet-toothed ambush brings squishy pixel enemies and a marshmallow launcher for a hero.",
+    "visualHook": "A magic warning ring pops into three grinning marshmallows as a hero receives a launcher firing fluffy pixel shots.",
+    "acceptance": [
+      "On deploy, show a magic telegraph immediately; after 2 seconds spawn three custom marshmallow enemies and equip one available hero with the launcher.",
+      "At 5 seconds, show a cheerful impact ring as the aftermath; the launcher remains equipped.",
+      "When the equipped hero fires, the weapon uses a custom marshmallow projectile.",
+      "!mallow repeats the sequence with a 30-second cooldown; overlapping sequences are blocked.",
+      "If no hero is present, the enemy ambush and effects still occur; equipment is conditional on an available hero."
+    ],
+    "commands": [
+      "!mallow"
+    ],
+    "credits": [
+      {
+        "id": "sim-20",
+        "name": "QuietQuokka",
+        "source": "simulator"
+      },
+      {
+        "id": "sim-3",
+        "name": "星の鍛冶屋",
+        "source": "simulator"
+      },
+      {
+        "id": "sim-12",
+        "name": "SparkSage",
+        "source": "simulator"
+      }
+    ],
+    "feasibility": "Define the enemy, projectile and hero weapon; schedule the ambush and equip a bounded hero query.",
+    "risk": "Low: three modest enemies per activation and one equipped hero.",
+    "suggestion": false,
+    "ideaIds": [
+      49,
+      56,
+      103
+    ]
+  },
+  "report": {
+    "ok": true,
+    "checks": [
+      {
+        "name": "baseline (host responsibility)",
+        "ok": true,
+        "detail": "900 ticks with live mods; host invariants valid"
+      },
+      {
+        "name": "static contract",
+        "ok": true,
+        "detail": "24 KiB / restricted AST / literal contract"
+      },
+      {
+        "name": "simulation 1",
+        "ok": true,
+        "detail": "900 ticks; 22 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "simulation 2",
+        "ok": true,
+        "detail": "900 ticks; 22 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "determinism",
+        "ok": true,
+        "detail": "64a4d573"
+      }
+    ],
+    "hashes": [
+      "64a4d573",
+      "64a4d573"
+    ],
+    "ticks": 1800,
+    "durationMs": 2270,
+    "effects": 22,
+    "spectacle": {
+      "score": 10,
+      "fxTypes": 9,
+      "sprites": 1,
+      "entities": 5,
+      "commands": 1,
+      "durationSeconds": 5
+    }
+  },
+  "buildSeconds": 50.856,
+  "attempts": 1,
+  "threadId": "01a17d28-dc88-7ed0-a8f8-3bd12a9a5245",
+  "timeline": [
+    {
+      "stage": "IDLE",
+      "time": 1793101190193
+    },
+    {
+      "stage": "COLLECTING",
+      "time": 1793101190239
+    },
+    {
+      "stage": "CURATING",
+      "time": 1793101242999
+    },
+    {
+      "stage": "VOTING",
+      "time": 1793101267319
+    },
+    {
+      "stage": "STREAMER_APPROVAL",
+      "time": 1793101297688
+    },
+    {
+      "stage": "BUILDING",
+      "time": 1793101307748
+    },
+    {
+      "stage": "TESTING",
+      "time": 1793101355444
+    },
+    {
+      "stage": "DEPLOYING",
+      "time": 1793101358385
+    },
+    {
+      "stage": "LIVE",
+      "time": 1793101358526
+    }
+  ]
+}

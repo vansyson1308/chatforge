@@ -37,6 +37,7 @@ it("moderates, merges duplicate credits, canonicalizes names and labels fillers"
     new AbortController().signal,
   );
   expect(result.rejected).toEqual([3, 4]);
+  expect(result.cards[0]!.ideaIds).toEqual([1, 2]);
   expect(moderate).toHaveBeenCalledOnce();
   expect(result.cards[0]!.credits.map((c) => c.name)).toEqual([
     "Viewer1",
@@ -81,4 +82,37 @@ it("does not preserve fabricated attribution", async () => {
   expect(
     result.cards.every((c) => c.suggestion && c.credits.length === 0),
   ).toBe(true);
+});
+
+it("keeps internal idea IDs out of the Responses wire schema", async () => {
+  const { zodTextFormat } = await import("openai/helpers/zod");
+  const { producerCardsSchema } = await import("./producer.js");
+  expect(() => zodTextFormat(producerCardsSchema, "forge_cards")).not.toThrow();
+});
+
+it("excludes live duplicates before moderation and rejects a repeated live command", async () => {
+  const moderate = vi.fn(async () => [false]);
+  let offered = "";
+  const producer = new ForgeProducer({
+    moderate,
+    cards: async (input) => {
+      offered = input;
+      return {
+        value: { cards: testCards.map((c) => ({ ...c, groupIds: [] })) },
+        tokens: 0,
+      };
+    },
+  });
+  await expect(
+    producer.curate(
+      [idea(1, "Rain rubber ducks"), idea(2, "Dragon ally")],
+      ["Duck rain: rain rubber ducks Commands: !spark"],
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow("repeated a live");
+  expect(moderate).toHaveBeenCalledWith(
+    ["Dragon ally"],
+    expect.any(AbortSignal),
+  );
+  expect(JSON.parse(offered).groups).toHaveLength(1);
 });

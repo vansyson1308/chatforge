@@ -14,6 +14,53 @@ import { testCards } from "./forge-fixtures.js";
 import { goodMod } from "./forge-fixtures.js";
 
 afterEach(() => vi.useRealTimers());
+it("never invokes or retries Codex for a host baseline fault", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  const build = vi.fn(async () => ({ source: goodMod, tokens: 0 })),
+    f = await fixture({ build });
+  try {
+    await voting(f.loop);
+    f.host.world.state.entities[0]!.x = 1500;
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    expect(build).not.toHaveBeenCalled();
+    expect(f.loop.build?.attempts).toBe(0);
+    expect(f.loop.build?.report?.hostFailure).toBe(true);
+  } finally {
+    await f.cleanup();
+  }
+});
+it("preserves CLI/host snapshot parity even while the live world advances during a build", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  let input: Parameters<Builder["build"]>[0] | undefined;
+  const f = await fixture({
+    build: async (request) => {
+      input = structuredClone({
+        ...request,
+        signal: undefined,
+        activity: undefined,
+      }) as unknown as typeof request;
+      for (let n = 0; n < 120; n++) f.host.tick();
+      return { source: goodMod, tokens: 0 };
+    },
+  });
+  try {
+    await voting(f.loop);
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    const local = await gatekeeper({
+      modId: input!.modId,
+      source: goodMod,
+      checkpoint: input!.checkpoint,
+      commands: input!.card.commands,
+      spectacle: true,
+    });
+    expect(f.loop.build?.report?.hashes).toEqual(local.hashes);
+    expect(f.host.world.state.tick).toBeGreaterThan(input!.checkpoint.tick);
+  } finally {
+    await f.cleanup();
+  }
+});
 it("reopens durable season/checkpoint/thread and stops interrupted builds", async () => {
   const directory = await mkdtemp(join(tmpdir(), "chatforge-restart-")),
     file = join(directory, "state.sqlite");
@@ -92,7 +139,10 @@ it("normal preset waits for manual approval and veto never builds", async () => 
 });
 it("a later live failure rolls back the generated set and broadcasts ROLLED_BACK", async () => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
-  const source = `export function register(api){api.registerCommand('!spark',()=>api.fx.banner('spark'),{cooldownSec:1});api.every(901,()=>{throw Error('late failure')})} export const forgeTest={commands:['!spark'],expect:{fx:['banner']}};`;
+  const source = goodMod.replace(
+    "export function register(api) {",
+    "export function register(api) { api.every(901,()=>{throw Error('late failure')});",
+  );
   const f = await fixture({ build: async () => ({ source, tokens: 0 }) });
   try {
     const before = f.host.world.hash();
@@ -113,6 +163,7 @@ it("a later live failure rolls back the generated set and broadcasts ROLLED_BACK
 async function fixture(
   builder: Builder = { build: async () => ({ source: goodMod, tokens: 0 }) },
   file = ":memory:",
+  onCelebrate: () => Promise<void> = async () => {},
 ) {
   const inbox = new IdeaInbox(file),
     host = new ModHost(new World(2026));
@@ -152,9 +203,10 @@ async function fixture(
       },
       celebrate: async (text) => {
         announcements.push(text);
+        await onCelebrate();
       },
     },
-    gate: (input) => gatekeeper(input),
+    gate: (input, _signal, onCheck) => gatekeeper(input, onCheck),
     broadcast: (view) => frames.push(structuredClone(view)),
     announce: (text) => announcements.push(text),
     resetRound: () => router.resetRound(),
@@ -219,10 +271,17 @@ it("Crowd Sim full round reaches LIVE, persists transitions and last-vote-wins",
       "DEPLOYING",
       "LIVE",
     ]);
-    expect(f.frames.some((v) => v.build?.stage === "TESTING")).toBe(true);
+    expect(
+      f.frames.some(
+        (v) =>
+          v.build?.stage === "TESTING" &&
+          v.build.report?.checks.some((c) => c.name === "simulation 1" && c.ok),
+      ),
+    ).toBe(true);
     await f.loop.safeMode();
     expect(Object.keys(f.host.world.state.mods)).toEqual(["seed"]);
     expect(f.loop.store.mods()).toHaveLength(0);
+    expect(f.loop.view().patches).toHaveLength(1);
   } finally {
     await f.cleanup();
   }
@@ -264,7 +323,7 @@ it("only one build runs while another round collects; cancel aborts the adapter"
     await vi.advanceTimersByTimeAsync(40000);
     expect(f.loop.build?.stage).toBe("BUILDING");
     await vi.advanceTimersByTimeAsync(85000);
-    expect(f.loop.round?.stage).toBe("STREAMER_APPROVAL");
+    expect(f.loop.round?.stage).toBe("COLLECTING");
     expect(build).toHaveBeenCalledOnce();
     expect(() => f.loop.approve()).toThrow();
     f.loop.cancel();
@@ -291,6 +350,45 @@ it("restores a persisted checkpoint, mod state and rollback history", async () =
     expect(store.threadId).toBe("persisted-thread");
   } finally {
     restored.dispose();
+    await f.cleanup();
+  }
+});
+
+it("keeps each consecutive ship moment LIVE while celebration awaits worker acknowledgement", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  let count = 0;
+  const f = await fixture(
+    {
+      build: async () => ({
+        source: goodMod.replaceAll(
+          "armageddon-duck",
+          `armageddon-duck-${++count}`,
+        ),
+        tokens: 0,
+      }),
+    },
+    ":memory:",
+    async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    },
+  );
+  try {
+    await voting(f.loop);
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    expect(f.loop.build?.stage).toBe("LIVE");
+    await vi.advanceTimersByTimeAsync(45000);
+    await f.loop.settled();
+    expect(f.loop.round?.stage).toBe("VOTING");
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    expect(count).toBe(2);
+    expect(f.loop.build?.stage).toBe("LIVE");
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(f.loop.build?.stage).toBe("LIVE");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(f.loop.build?.stage).toBe("IDLE");
+  } finally {
     await f.cleanup();
   }
 });

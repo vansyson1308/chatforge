@@ -24,7 +24,11 @@ export interface ForgeOptions {
   producer: Producer;
   builder: Builder;
   simulation: ForgeSimulation;
-  gate(input: GateInput, signal: AbortSignal): Promise<GateReport>;
+  gate(
+    input: GateInput,
+    signal: AbortSignal,
+    onCheck?: (check: GateReport["checks"][number]) => void,
+  ): Promise<GateReport>;
   broadcast(view: ForgeView): void;
   announce(text: string): void;
   resetRound(): void;
@@ -118,9 +122,15 @@ export class ForgeLoop {
           }
         : null,
       ideaCount: this.inbox.pendingCount(),
+      ideas: this.inbox.ideas
+        .filter((i) => i.status !== "rejected")
+        .slice(-4)
+        .reverse()
+        .map((i) => ({ author: i.author, text: i.text, source: i.source })),
       activity: [...this.activity],
       notice: this.notice,
       mods: this.store.mods(),
+      patches: this.store.mods(true),
       usage: {
         ...this.store.usage(this.now()),
         cap: this.options.buildCap ?? 12,
@@ -187,11 +197,22 @@ export class ForgeLoop {
     if (
       round.stage === "COLLECTING" &&
       this.now() >= round.deadline! &&
-      !this.curating
+      !this.curating &&
+      !this.building
     )
       this.track(this.curate(round));
     else if (round.stage === "VOTING" && this.now() >= round.deadline!) {
       round.winner = round.tallies.indexOf(Math.max(...round.tallies));
+      for (const [index, card] of round.cards.entries())
+        for (const [n, id] of (card.ideaIds ?? []).entries())
+          this.inbox.mark(
+            id,
+            index === round.winner
+              ? n === 0
+                ? "used"
+                : "merged"
+              : "not chosen",
+          );
       const delay = presets[this.preset].approval;
       this.stage(
         round,
@@ -234,7 +255,14 @@ export class ForgeLoop {
       for (const idea of ideas) {
         this.inbox.mark(
           idea.id,
-          result.rejected.includes(idea.id) ? "rejected" : "accepted",
+          result.rejected.includes(idea.id)
+            ? "rejected"
+            : result.cards.some((c) => c.ideaIds?.includes(idea.id))
+              ? "accepted"
+              : "not chosen",
+          result.rejected.includes(idea.id)
+            ? "Moderation: the forge only shapes a safe game world"
+            : "",
         );
       }
       if (result.rejected.length) this.options.announce(worldOnlyReason);
@@ -322,6 +350,7 @@ export class ForgeLoop {
       this.stage(round, "FAILED");
     // Only locally authored diagnostics, never raw provider payloads, enter the HUD.
     this.notice = label;
+    this.options.announce(`${label}. The game stays safe.`);
     this.line(
       error instanceof Error &&
         (error.name === "AbortError" || error.name === "TimeoutError")
@@ -333,6 +362,7 @@ export class ForgeLoop {
     const started = this.now(),
       buildId = this.store.beginBuild(round.id, started);
     this.buildStartedAt = started;
+    this.finishedAt = 0;
     this.buildAbort = new AbortController();
     const signal = AbortSignal.any([
       this.buildAbort.signal,
@@ -345,9 +375,26 @@ export class ForgeLoop {
       const card = round.cards[round.winner!]!;
       let source = "";
       for (let attempt = 1; attempt <= 3; attempt++) {
+        const checkpoint = await this.options.simulation.checkpoint();
+        const baseline = await this.options.gate(
+          {
+            modId: round.modId,
+            source: "",
+            checkpoint: checkpoint.world,
+            commands: [],
+            baselineOnly: true,
+          },
+          signal,
+        );
+        if (!baseline.ok) {
+          round.report = baseline;
+          this.line(
+            `HOST BASELINE ERROR: ${baseline.checks.find((c) => !c.ok)?.detail ?? "invalid world"}`,
+          );
+          throw Error("Host baseline invalid; Builder was not called");
+        }
         round.attempts = attempt;
         this.store.saveBuild(buildId, round);
-        const checkpoint = await this.options.simulation.checkpoint();
         const result = await this.options.builder.build({
           modId: round.modId,
           card,
@@ -359,17 +406,29 @@ export class ForgeLoop {
         source = result.source;
         this.store.addTokens(result.tokens);
         signal.throwIfAborted();
+        round.report = {
+          ok: false,
+          checks: [],
+          hashes: [],
+          ticks: 0,
+          durationMs: 0,
+          effects: 0,
+        };
         this.stage(round, "TESTING");
-        // Refresh at test time: live state can advance while the Builder is running.
-        const current = await this.options.simulation.checkpoint();
+        // Exact admission parity: the Builder CLI and host use this immutable snapshot.
         round.report = await this.options.gate(
           {
             modId: round.modId,
             source,
-            checkpoint: current.world,
+            checkpoint: checkpoint.world,
             commands: card.commands,
+            spectacle: true,
           },
           signal,
+          (check) => {
+            round.report!.checks.push(check);
+            this.publish();
+          },
         );
         round.durationMs = this.now() - started;
         this.store.saveBuild(buildId, round);
@@ -391,6 +450,7 @@ export class ForgeLoop {
       signal.throwIfAborted();
       this.store.deploy(round, source, this.now());
       this.store.checkpoint(live);
+      this.finishedAt = this.now();
       this.stage(round, "LIVE");
       const credits =
         card.credits

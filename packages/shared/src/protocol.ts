@@ -3,7 +3,7 @@ import { z } from "zod";
 export const renderEntitySchema = z.tuple([
   z.number().int().positive(),
   z.string().max(40),
-  z.enum(["hero", "enemy", "projectile"]),
+  z.enum(["hero", "enemy", "projectile", "prop"]),
   z.number(),
   z.number(),
   z.number(),
@@ -12,6 +12,8 @@ export const renderEntitySchema = z.tuple([
   z.number().int(),
   z.number().int(),
   z.boolean().optional(),
+  z.number().min(0.5).max(4).optional(),
+  z.string().max(40).optional(),
 ]);
 export const renderSnapshotSchema = z.object({
   type: z.literal("snapshot"),

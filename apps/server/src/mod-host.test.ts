@@ -163,7 +163,7 @@ it("bounds projectiles produced by extreme custom weapons to the owning mod budg
         kind: "hero",
         team: "hero",
         x: 100,
-        y: 200 + i * 40,
+        y: 470 + i * 10,
         hp: 10000,
         speed: 0,
       });
@@ -171,7 +171,7 @@ it("bounds projectiles produced by extreme custom weapons to the owning mod budg
       kind: "target",
       team: "enemy",
       x: 400,
-      y: 400,
+      y: 510,
       hp: 100000,
       speed: 0,
       damage: 0,

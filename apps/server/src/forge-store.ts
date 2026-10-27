@@ -185,10 +185,12 @@ export class ForgeStore {
           .prepare("UPDATE mod_versions SET active=0 WHERE id=?")
           .run(mod.id);
   }
-  mods(): { id: string; title: string; credits: ForgeCard["credits"] }[] {
+  mods(
+    includeHistory = false,
+  ): { id: string; title: string; credits: ForgeCard["credits"] }[] {
     return this.db
       .prepare(
-        "SELECT id,card FROM mod_versions WHERE season=? AND active=1 ORDER BY createdAt",
+        `SELECT id,card FROM mod_versions WHERE season=? ${includeHistory ? "" : "AND active=1"} ORDER BY createdAt`,
       )
       .all(this.season)
       .map((row) => {

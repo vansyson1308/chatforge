@@ -1,4 +1,22 @@
-# Mod API v1 — authoring contract
+# Mod API v1.1 — spectacle contract
+
+This section extends the base authoring contract below. All calls remain bounded transactional QuickJS bindings. New mods should read `rubber-duck-armageddon.js` and `dragon-raid-ally.js` as gold standards.
+
+- `defineEnemy(name, {sprite,hp,speed,damage,range?,behavior,team?,scale?})`: team `enemy` (default), `hero` (ally), or `prop`; scale 0.5–4. Ground units remain in y=455–610. Define unique names per mod.
+- `defineProp(name,{sprite,scale?})`: stationary decoration with no combat AI. Spawn with ordinary `spawn`; still counts against the 100-entity mod budget.
+- `defineHat(name,sprite)`, then `equipHat(heroId,name)`: decorate a hero with a sprite owned by this mod.
+- `fx.text(x,y,text)`: floating text, 80 characters, two seconds.
+- `fx.ring(x,y,radius,color,ticks)`: radius 1–250, duration 1–180 ticks.
+- `fx.beam(x1,y1,x2,y2,color,ticks)`: 1–90 ticks; `fx.lightning(x1,y1,x2,y2)` lasts 18 ticks.
+- `fx.flash(color,ticks)`: low-opacity flash, 1–30 ticks. `fx.trail(entityId,color,ticks)`: 1–180 ticks.
+- `fx.sky(theme,seconds)`: blood-moon, sunset, aurora or storm; 1–30 seconds.
+- `sfx(cueId)`: anvil, thunder, magic or cheer. Overlay synth is muted by default; A or Sound button enables it.
+
+Colors are six-digit hex. Co-ordinates remain x=-200..1400 and y=-200..875; visible stage is x=0..1200, ground y=455..610. Props may occupy the sky. Queries return read-only handles; mutate only via documented methods. New FX names are accepted in `forgeTest.expect.fx`.
+
+Every generated mod must draw a recognisable >=12x12 sprite with >=4 colors, register a chat command, use layered FX, credit card contributors, and automatically introduce itself within 10 seconds. Use `every(30)` with `api.state.introduced` and named schedules to stage telegraph → climax → aftermath. Keep balance fair. Target 60–200 lines, source <=24 KiB. Gate scores immediacy 2 + command 2 + drawn sprite 3 + layered event lasting >=3s 3; threshold >=7 plus sprite, command and >=2 FX types. A sprite merely declared but never drawn does not count.
+
+## Base authoring contract
 
 ## M3 admission contract
 
@@ -28,7 +46,7 @@ These assertions prove observable effects and simulation safety, not arbitrary E
 
 Write a single ES module exporting `register(api)`. It runs in a separate QuickJS runtime, never in Node or the browser. No imports, network, filesystem, DOM, process, wall clock, `eval`, dynamic function constructors, async functions, Promises or native timers. Use synchronous callbacks, `api.random()` and simulation ticks (30 ticks = 1 second).
 
-## Declaration and persistence rules — read before writing a mod
+## Declaration and persistence rules â€” read before writing a mod
 
 **`register(api)` is a pure declaration phase.** Only `defineEnemy`, `defineProjectile`, `defineHeroWeapon`, `on`, `every`, `registerCommand` and `onSchedule` are allowed. Do not spawn, read the world, access `api.state`, emit FX or mutate rules during registration. Initialize state lazily inside a runtime callback.
 
@@ -42,20 +60,20 @@ A failure restores that source version's complete pre-deploy checkpoint (includi
 
 ## Definitions and entity handles
 
-- `defineEnemy(name, {sprite, hp, speed, damage, behavior, range?})`: `hp` 1–5000, speed 0–10, damage 0–500, range 1–500 (default 20). Behaviors: `wander`, `chase`, `orbit`, `ranged` (kite), `guard` (keep patrol).
-- `defineProjectile(name, {sprite, speed, damage, lifetime})`: speed 1–20 units/tick, damage 0–500, lifetime 1–300 ticks. Declare it before a weapon referencing it. Projectiles are fired automatically by equipped heroes; `spawn` creates enemy definitions only.
-- `defineHeroWeapon(name, {damage, range, cooldown, projectile?})`: damage 0–500, range 1–500, cooldown 1–300 ticks. Omit projectile for melee. Weapon damage overrides the projectile's base damage. All hero damage is multiplied by `heroDamageMultiplier`.
-- Sprite: `{grid: ['.aa.', 'aaaa'], palette: {a:'#ff8833'}}`; rectangular 1–24 cells on each axis, 1–8 single-character palette keys, six-digit hex colors, `.` transparent. Definitions share a global namespace; a mod may only spawn/equip/reference its own definitions.
-- `spawn(kind, x, y)` returns an enemy handle. Coordinates clamp to x −200…1400, y −200…875.
-- `query({team?, kind?, tag?, limit?})` returns up to 300 live handles (optional `limit` clamps to 1–300; use it to avoid copying unused entities) in stable entity order. Team is `hero`, `enemy` or `projectile`.
-- Handle fields: `id, kind, team, x, y, hp, maxHp, tags`. Methods: `damage(0…500)`, `heal(0…500)`, `setSpeed(0…10)`, `tag(name)`, `equip(weaponName)` (heroes only). Damage emits kill/progression/loot events through the same engine combat path.
+- `defineEnemy(name, {sprite, hp, speed, damage, behavior, range?})`: `hp` 1â€“5000, speed 0â€“10, damage 0â€“500, range 1â€“500 (default 20). Behaviors: `wander`, `chase`, `orbit`, `ranged` (kite), `guard` (keep patrol).
+- `defineProjectile(name, {sprite, speed, damage, lifetime})`: speed 1â€“20 units/tick, damage 0â€“500, lifetime 1â€“300 ticks. Declare it before a weapon referencing it. Projectiles are fired automatically by equipped heroes; `spawn` creates enemy definitions only.
+- `defineHeroWeapon(name, {damage, range, cooldown, projectile?})`: damage 0â€“500, range 1â€“500, cooldown 1â€“300 ticks. Omit projectile for melee. Weapon damage overrides the projectile's base damage. All hero damage is multiplied by `heroDamageMultiplier`.
+- Sprite: `{grid: ['.aa.', 'aaaa'], palette: {a:'#ff8833'}}`; rectangular 1â€“24 cells on each axis, 1â€“8 single-character palette keys, six-digit hex colors, `.` transparent. Definitions share a global namespace; a mod may only spawn/equip/reference its own definitions.
+- `spawn(kind, x, y)` returns an enemy handle. Coordinates clamp to x âˆ’200â€¦1400, y âˆ’200â€¦875.
+- `query({team?, kind?, tag?, limit?})` returns up to 300 live handles (optional `limit` clamps to 1â€“300; use it to avoid copying unused entities) in stable entity order. Team is `hero`, `enemy` or `projectile`.
+- Handle fields: `id, kind, team, x, y, hp, maxHp, tags`. Methods: `damage(0â€¦500)`, `heal(0â€¦500)`, `setSpeed(0â€¦10)`, `tag(name)`, `equip(weaponName)` (heroes only). Damage emits kill/progression/loot events through the same engine combat path.
 - Definition/schedule/tag names: `/^[a-z][a-z0-9_-]{0,39}$/`.
 
 ## Events, commands, state and rules
 
 `on(name, fn)` accepts `tick`, `wave_start`, `wave_end`, `hero_join`, `enemy_killed`, `keep_damaged`, `twitch:sub`, `twitch:cheer`, `twitch:raid`, `twitch:follow`. Tick payload has `tick`; waves have `wave`; join has `entityId, viewer`; kills have `entityId, kind, x, y`; keep damage has `amount, hp`; dev Twitch events have `viewer`. Twitch wiring arrives in M2.
 
-`registerCommand('!name', (viewer, args) => {}, {cooldownSec})`: names match `!` plus 1–20 lowercase letters/digits/underscore. Cooldown 0–3600 seconds is **global per mod command**, persisted in ticks. Viewer/argument strings are capped at 40/200 characters.
+`registerCommand('!name', (viewer, args) => {}, {cooldownSec})`: names match `!` plus 1â€“20 lowercase letters/digits/underscore. Cooldown 0â€“3600 seconds is **global per mod command**, persisted in ticks. Viewer/argument strings are capped at 40/200 characters.
 
 `random()` returns seeded `[0,1)`. `log(text)` emits a diagnostic event (200 characters). `state` is a mod-private JSON object, maximum 16 KiB UTF-8, depth 32, 4096 visited values. Store needed data there, not in outer variables.
 
@@ -77,18 +95,18 @@ Gravity accelerates projectile vertical velocity by `gravity * 0.01` per tick. E
 
 All text is rendered through Canvas `fillText`. Effects are render events, never executable HTML.
 
-- `fx.banner(text)` ≤120 characters.
-- `fx.telegraph(x,y,radius,ticks)`: radius 1–150, duration 1–300; pulsing/filling meteor target and incoming fireball.
+- `fx.banner(text)` â‰¤120 characters.
+- `fx.telegraph(x,y,radius,ticks)`: radius 1â€“150, duration 1â€“300; pulsing/filling meteor target and incoming fireball.
 - `fx.impact(x,y)`: flash and fading crater, 90 ticks.
-- `fx.shake(intensity,ticks)`: intensity 0–20, duration 0–300.
-- `fx.particles(x,y,'#rrggbb',count)`: count 0–100 (renderer samples up to 40).
-- `fx.tint('#rrggbb',ticks)` and `fx.weather(kind,ticks)`: duration 0–1800; weather `rain|snow|ash|meteor|aurora`.
+- `fx.shake(intensity,ticks)`: intensity 0â€“20, duration 0â€“300.
+- `fx.particles(x,y,'#rrggbb',count)`: count 0â€“100 (renderer samples up to 40).
+- `fx.tint('#rrggbb',ticks)` and `fx.weather(kind,ticks)`: duration 0â€“1800; weather `rain|snow|ash|meteor|aurora`.
 
 ## Enforced budgets
 
 4 MiB memory and 256 KiB stack per mod; 50 ms registration; aggregate 20 ms thread CPU execution per mod per simulation tick (60 ms on shared CI runners). Deadlines also bound infinite loops. 16 loaded mods; 32 definitions per mod; 100 owned living entities (including weapon projectiles); 1000 total world entities; 128 buffered writes and 256 host operations per invocation. Catching a buffer/operation quota exception cannot rescue the transaction.
 
-Per mod: 32 repeating timers, 32 named schedule declarations, 32 pending schedules, 16 commands, 32 listeners per event. Delays/intervals are integer 1–108000 ticks; schedule payload ≤4 KiB UTF-8. Definition/source maximum 100000 characters (file loader additionally caps bytes). The JSON bridge caps each request/response at 65536 characters. Tags cap at 16 per entity. Numeric values must be finite; invalid shapes throw, valid numbers are clamped to the documented bounds.
+Per mod: 32 repeating timers, 32 named schedule declarations, 32 pending schedules, 16 commands, 32 listeners per event. Delays/intervals are integer 1â€“108000 ticks; schedule payload â‰¤4 KiB UTF-8. Definition/source maximum 100000 characters (file loader additionally caps bytes). The JSON bridge caps each request/response at 65536 characters. Tags cap at 16 per entity. Numeric values must be finite; invalid shapes throw, valid numbers are clamped to the documented bounds.
 
 ## Complete examples
 

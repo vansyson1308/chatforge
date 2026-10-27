@@ -27,6 +27,8 @@ export interface PixelSprite {
   palette: Record<string, string>;
 }
 export interface EntityDefinition {
+  team?: "enemy" | "hero" | "prop";
+  scale?: number;
   sprite: PixelSprite;
   hp: number;
   speed: number;
@@ -64,6 +66,10 @@ export interface EntityHandle extends EntityView {
   equip(weapon: string): void;
 }
 export interface ModApi {
+  defineHat(name: string, sprite: PixelSprite): void;
+  equipHat(heroId: number, name: string): void;
+  defineProp(name: string, spec: { sprite: PixelSprite; scale?: number }): void;
+  sfx(cue: "anvil" | "thunder" | "magic" | "cheer"): void;
   defineEnemy(name: string, definition: EntityDefinition): void;
   defineHeroWeapon(name: string, definition: HeroWeaponDefinition): void;
   defineProjectile(name: string, definition: ProjectileDefinition): void;
@@ -88,6 +94,29 @@ export interface ModApi {
     set(key: RuleKey, value: number): number;
   };
   fx: {
+    text(x: number, y: number, text: string): void;
+    ring(
+      x: number,
+      y: number,
+      radius: number,
+      color: string,
+      ticks: number,
+    ): void;
+    beam(
+      x1: number,
+      y1: number,
+      x2: number,
+      y2: number,
+      color: string,
+      ticks: number,
+    ): void;
+    lightning(x1: number, y1: number, x2: number, y2: number): void;
+    flash(color: string, ticks: number): void;
+    trail(entityId: number, color: string, ticks: number): void;
+    sky(
+      theme: "blood-moon" | "sunset" | "aurora" | "storm",
+      seconds: number,
+    ): void;
     telegraph(x: number, y: number, radius: number, ticks: number): void;
     shake(intensity: number, ticks: number): void;
     particles(x: number, y: number, color: string, count: number): void;

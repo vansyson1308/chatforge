@@ -1,0 +1,130 @@
+{
+  "round": 1,
+  "card": {
+    "spectacle": {
+      "visibleWithinSeconds": 1,
+      "chatInvolvement": true,
+      "customSprite": true,
+      "timedEvent": true,
+      "score": 10
+    },
+    "title": "Thunder Lizard Armory",
+    "pitch": "A pixel dragon forge announces its arrival, then arms up to two heroes with dragon gear that fires lightning-bolt shots.",
+    "visualHook": "A little dragon-shaped forge flashes before chunky pixel lightning starts flying.",
+    "acceptance": [
+      "Automatically show the custom dragon forge and a lightning telegraph within 30 ticks of deploy.",
+      "After 60 more ticks, equip up to two available heroes with the custom dragon weapon; its projectile uses a lightning-bolt sprite.",
+      "Show a brief lightning-and-ring aftermath by tick 180. A raid or !dragon can repeat the sequence with a 30-second cooldown.",
+      "If no heroes are present, the forge and effects still appear; equip eligible heroes on a later activation."
+    ],
+    "commands": [
+      "!dragon"
+    ],
+    "credits": [
+      {
+        "id": "sim-16",
+        "name": "TinyTroll",
+        "source": "simulator"
+      },
+      {
+        "id": "sim-2",
+        "name": "MưaNhỏ",
+        "source": "simulator"
+      }
+    ],
+    "feasibility": "Define a dragon prop, hero weapon and projectile; use bounded hero queries, equip, scheduled effects and raid/command callbacks.",
+    "risk": "Low: equip at most two heroes per activation; use ordinary bounded weapon damage.",
+    "suggestion": false,
+    "ideaIds": [
+      7,
+      8,
+      24
+    ]
+  },
+  "report": {
+    "ok": true,
+    "checks": [
+      {
+        "name": "baseline (host responsibility)",
+        "ok": true,
+        "detail": "900 ticks with live mods; host invariants valid"
+      },
+      {
+        "name": "static contract",
+        "ok": true,
+        "detail": "24 KiB / restricted AST / literal contract"
+      },
+      {
+        "name": "simulation 1",
+        "ok": true,
+        "detail": "900 ticks; 20 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "simulation 2",
+        "ok": true,
+        "detail": "900 ticks; 20 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "determinism",
+        "ok": true,
+        "detail": "773b1b8e"
+      }
+    ],
+    "hashes": [
+      "773b1b8e",
+      "773b1b8e"
+    ],
+    "ticks": 1800,
+    "durationMs": 1990,
+    "effects": 20,
+    "spectacle": {
+      "score": 10,
+      "fxTypes": 8,
+      "sprites": 1,
+      "entities": 12,
+      "commands": 1,
+      "durationSeconds": 29
+    }
+  },
+  "buildSeconds": 52.648,
+  "attempts": 1,
+  "threadId": "01a17d28-dc88-7ed0-a8f8-3bd12a9a5245",
+  "timeline": [
+    {
+      "stage": "IDLE",
+      "time": 1793101083093
+    },
+    {
+      "stage": "COLLECTING",
+      "time": 1793101083117
+    },
+    {
+      "stage": "CURATING",
+      "time": 1793101128308
+    },
+    {
+      "stage": "VOTING",
+      "time": 1793101149749
+    },
+    {
+      "stage": "STREAMER_APPROVAL",
+      "time": 1793101179915
+    },
+    {
+      "stage": "BUILDING",
+      "time": 1793101190115
+    },
+    {
+      "stage": "TESTING",
+      "time": 1793101239862
+    },
+    {
+      "stage": "DEPLOYING",
+      "time": 1793101242461
+    },
+    {
+      "stage": "LIVE",
+      "time": 1793101242648
+    }
+  ]
+}

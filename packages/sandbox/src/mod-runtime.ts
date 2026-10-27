@@ -60,6 +60,10 @@ const bootstrap = `
     }));
   }
   const api = Object.freeze({
+    defineHat: (name,sprite) => { declaration(); return host('defineHat',name,{sprite}); },
+    defineProp: (name,spec) => { declaration(); return host('defineProp',name,spec); },
+    equipHat: (id,name) => host('entity.equipHat',id,name),
+    sfx: cue => host('sfx',cue),
     defineEnemy: (name,spec) => { declaration(); return host('defineEnemy',name,spec); },
     defineHeroWeapon: (name,spec) => { declaration(); return host('defineHeroWeapon',name,spec); },
     defineProjectile: (name,spec) => { declaration(); return host('defineProjectile',name,spec); },
@@ -84,7 +88,7 @@ const bootstrap = `
     },
     schedule: (name,delay,payload) => host('schedule',name,delay,parse(jsonState(payload))),
     rules: Object.freeze({get: key => host('rules.get',key), set: (key,value) => host('rules.set',key,value)}),
-    fx: Object.freeze(Object.fromEntries(['telegraph','shake','particles','banner','tint','weather','impact'].map(name => [name,(...args) => host('fx.'+name,...args)]))),
+    fx: Object.freeze(Object.fromEntries(['telegraph','shake','particles','banner','tint','weather','impact','text','ring','beam','lightning','flash','trail','sky'].map(name => [name,(...args) => host('fx.'+name,...args)]))),
     random: () => host('random'),
     get state() { if (declaring) throw Error('api.state is runtime-only; register must be pure'); return state; },
     log: message => host('log',message),

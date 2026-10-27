@@ -1,6 +1,6 @@
-# M3 operating guide
+# Forge operating guide (M3/M4)
 
-Run `pnpm build` then `pnpm start`, choose Demo or Normal in the dashboard and click Start Forge. Demo collects/votes/auto-approves in 45/30/10 seconds; Normal uses 90/45 seconds and manual approval. One next round can collect/vote while a build runs, then waits for the build slot. Last vote per source/user wins; ties select the first card. Veto starts fresh collection. Stop aborts AI work and leaves the existing game running.
+Run `pnpm build` then `pnpm start`, choose Demo or Normal in the dashboard and click Start Forge. Demo collects/votes/auto-approves in 45/30/10 seconds; Normal uses 90/45 seconds and manual approval. While a build is active, the next round may only collect. Curation and voting wait for LIVE or FAILED. Last vote per source/user wins; ties select the first card. Veto starts fresh collection. Stop aborts AI work and leaves the existing game running.
 
 Stages: `IDLE -> COLLECTING -> CURATING -> VOTING -> STREAMER_APPROVAL -> BUILDING -> TESTING -> DEPLOYING -> LIVE -> IDLE`, plus FAILED/ROLLED_BACK. Gatekeeper rejection returns TESTING to BUILDING in the same thread, at most twice. Failures do not retry paid requests indefinitely. A failed collection needs stop/start; normal approval can be vetoed.
 
@@ -18,6 +18,24 @@ Routes: `GET /api/forge`, `GET /forge/patch-notes`; JSON `POST /api/forge/{start
 
 `pnpm forge:dry-run 1` or `2` uses its own ignored database and no Twitch auth/chat. It restores prior successful dry-run mods and reuses a Codex thread. Collection/voting clocks fast-forward; AI/build/test work uses real wall time. Failure exits nonzero. Sources, reports and measured timelines are in [sample-mods](media/sample-mods/README.md). Both real samples are revalidated by ordinary tests; the healing sample also proves five HP restored to an injured hero.
 
-M4 note from the Twitch live test: wave 12 still had a full-health keep and idle enemies on hills. Combat pacing remains unchanged in M3.
+M4 replaces the idle hill combat with ground siege waves, a fifth-wave boss and perpetual fall/rebuild. Newly forged creatures receive a two-second noncombat entrance so a crowd of heroes cannot erase the ship moment in one tick.
 
 `node scripts/verify-forge-handoff.mjs` checks the built dashboard, WS, start/stop, Safe Mode, patch notes and HTTP boundary using a temporary `CHATFORGE_RUNTIME_DIR`. It cleans up its own server/browser/data and makes no Twitch/AI requests. Optional `CHATFORGE_CAPTURE=1` captures preview screenshots with the saved real cards injected into the browser protocol: [dashboard](media/m3-dashboard.png), [overlay](media/m3-overlay.png). These are labelled previews, not screenshots of an active live voting round.
+
+## M4 admission and spectacle
+
+The real QC failure was an existing aurora-bolt projectile escaping y=-200 (reproduced entity 460 at y=-201.38). Off-world projectiles now expire; ground actors remain in their ground band. Baseline admission runs 900 ticks before any Builder call, with the same invariant function used for candidate runs. Error text identifies tick, entity/kind and field/value. Worker checkpoint reads repair legacy invalid entities and report the repairs on stderr. A remaining baseline failure is a host fault, fails closed and spends zero Builder attempts.
+
+Each attempt freezes its live snapshot before the SDK turn. Both workspace CLI and independent host admission use that exact JSON snapshot, mod set, command list, 900-tick harness and spectacle policy. The game continues running; it is not rewound on deployment. No fresh snapshot is silently substituted for the CLI's tested input. Repair attempts refresh the shared snapshot. Automatic runtime rollback still protects the evolving live world.
+
+Idea states: pending, accepted (on a ballot), used (winning idea), merged (additional winning contributors), not chosen (eligible again), rejected (moderation with reason). Unselected ideas are not moderation failures. Producer scores immediacy, participation, custom sprites and staged events, and sees live mod summaries to avoid repeats.
+
+`mods/` and `live/` are reset at a new build; only current live sources enter the read-only reference folder. Reference hashes reject edits; the candidate directory contains one current file. Isolated Codex config disables apps, plugins, remote plugins, skills and multi-agent discovery and carries no MCP entries. Native Windows sandbox binaries are required by the SDK and can regenerate; clean them only after the SDK stops. `pnpm clean:runtime` has an exact two-cache allowlist and rejects symlink ancestors; auth/sessions/database/workspace are never deletion targets.
+
+Overlay: large phase CTA/countdown, contributor cards and animated vote bars, build stepper/activity/attempts/report, ship/failure moments and patch-history flags on the keep. H toggles Hall of Patches; `?hall=1` opens it. A or the Sound button toggles a muted-by-default WebAudio synth. `?dev=1` enables development hotkeys/hints. `?mode=overlay` keeps the game centered in the lower transparent band without stretching pixel art, and the HUD in independent 1080p safe areas.
+
+The live soak command starts its own real server, actual simulation worker, Crowd Sim hype, Producer, Codex SDK and Gatekeeper worker. Collection/voting are not accelerated. It captures actual browser phases and exports sources/reports, then stops its server/browser. It does not use Twitch credentials or send chat.
+
+Actual completed Gatekeeper checks stream from its worker to the HUD. Pending circles become ticks only after the corresponding baseline, static, simulation or determinism check reports success. A new LIVE timestamp is set before awaiting celebration, preventing a previous round's timer from hiding the next ship moment. The permanent keep pieces and Hall use all shipped versions, including rolled-back history; active mods remain a separate list.
+
+Producer excludes lexical duplicates of live titles/pitches before moderation and rejects repeated live commands in returned cards; the model also receives the live summaries for semantic avoidance. This is not a claim of perfect semantic equivalence detection. Ordinary not-chosen ideas remain eligible next round; only moderation decisions are labelled rejected with a reason.

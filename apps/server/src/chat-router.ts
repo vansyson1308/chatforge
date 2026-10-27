@@ -36,6 +36,15 @@ export class IdeaInbox {
       !this.db
         .prepare("PRAGMA table_info(ideas)")
         .all()
+        .some((c) => c.name === "reason")
+    )
+      this.db.exec(
+        "ALTER TABLE ideas ADD COLUMN reason TEXT NOT NULL DEFAULT ''",
+      );
+    if (
+      !this.db
+        .prepare("PRAGMA table_info(ideas)")
+        .all()
         .some((c) => c.name === "normalized")
     )
       this.db.exec(
@@ -50,7 +59,7 @@ export class IdeaInbox {
       const key = `${String(row.source)}:${String(row.userId)}:${normalized}`;
       const status =
         row.status === "pending" && pending.has(key)
-          ? "rejected"
+          ? "merged"
           : String(row.status);
       if (status === "pending") pending.add(key);
       this.db
@@ -83,27 +92,36 @@ export class IdeaInbox {
   hasPending(chat: Pick<Chat, "source" | "userId">, text: string): boolean {
     return !!this.db
       .prepare(
-        "SELECT 1 FROM ideas WHERE source=? AND userId=? AND normalized=? AND status='pending'",
+        "SELECT 1 FROM ideas WHERE source=? AND userId=? AND normalized=? AND status IN ('pending','not chosen')",
       )
       .get(chat.source, chat.userId, ideaKey(text));
   }
   pending(limit = 200): Idea[] {
     return this.db
-      .prepare("SELECT * FROM ideas WHERE status='pending' ORDER BY id LIMIT ?")
+      .prepare(
+        "SELECT * FROM ideas WHERE status IN ('pending','not chosen') ORDER BY id LIMIT ?",
+      )
       .all(limit)
       .map((row) => ideaSchema.parse(row));
   }
   pendingCount(): number {
     return Number(
       this.db
-        .prepare("SELECT COUNT(*) AS count FROM ideas WHERE status='pending'")
+        .prepare(
+          "SELECT COUNT(*) AS count FROM ideas WHERE status IN ('pending','not chosen')",
+        )
         .get()?.count ?? 0,
     );
   }
-  mark(id: number, status: Idea["status"]): void {
-    this.db.prepare("UPDATE ideas SET status=? WHERE id=?").run(status, id);
+  mark(id: number, status: Idea["status"], reason = ""): void {
+    this.db
+      .prepare("UPDATE ideas SET status=?,reason=? WHERE id=?")
+      .run(status, reason, id);
     const cached = this.ideas.find((idea) => idea.id === id);
-    if (cached) cached.status = status;
+    if (cached) {
+      cached.status = status;
+      cached.reason = reason;
+    }
   }
   private lastPrune = 0;
   claimEvent(id: string, timestamp: number, now = Date.now()): boolean {

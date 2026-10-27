@@ -78,6 +78,7 @@ async function fixture() {
     "packages/mod-api/src",
     "apps/server/examples",
     "login",
+    ".agents/skills/test-skill",
   ])
     await mkdir(join(root, dir), { recursive: true });
   await writeFile(join(root, "docs/MOD_API.md"), "Fixture contract");
@@ -86,6 +87,10 @@ async function fixture() {
     "export interface API {}",
   );
   await writeFile(join(root, "login/auth.json"), "{}");
+  await writeFile(
+    join(root, ".agents/skills/test-skill/SKILL.md"),
+    "untrusted skill fixture",
+  );
   let id: string | undefined;
   const activity: string[] = [];
   const builder = new WorkspaceBuilder(
@@ -128,7 +133,16 @@ it("runs a bounded Codex adapter, persists/reuses thread, and redacts arbitrary 
   const f = await fixture();
   try {
     expect((await f.builder.build(f.request())).source).toBe(goodMod);
+    expect(
+      await readFile(join(f.builder.directory, "checkpoint.json"), "utf8"),
+    ).toBe(JSON.stringify(f.request().checkpoint));
+    expect(
+      await readFile(join(f.builder.directory, "forge-test.mjs"), "utf8"),
+    ).toContain("spectacle:true");
     await f.builder.build(f.request("forge-2"));
+    await expect(
+      readFile(join(f.builder.directory, "mods/forge-1.js"), "utf8"),
+    ).rejects.toThrow();
     expect(mock.starts).toBe(1);
     expect(mock.calls).toBe(2);
     expect(f.thread()).toBe("fake-codex-thread");
@@ -138,6 +152,23 @@ it("runs a bounded Codex adapter, persists/reuses thread, and redacts arbitrary 
       approvalPolicy: "never",
       webSearchMode: "disabled",
       modelReasoningEffort: "low",
+    });
+    const config = await readFile(
+      join(f.root, "runtime/secrets/forge-codex/config.toml"),
+      "utf8",
+    );
+    expect(config).toContain("[skills.bundled]\nenabled = false");
+    expect(config).toContain("test-skill");
+    expect(config).toContain("[[skills.config]]");
+    expect(config).not.toContain("[mcp_servers.");
+    expect(mock.options.config).toMatchObject({
+      features: {
+        apps: false,
+        plugins: false,
+        remote_plugin: false,
+        multi_agent: false,
+        skill_mcp_dependency_install: false,
+      },
     });
     expect(mock.options.env).not.toHaveProperty("OPENAI_API_KEY");
     expect(mock.options.env).not.toHaveProperty("TWITCH_CLIENT_SECRET");

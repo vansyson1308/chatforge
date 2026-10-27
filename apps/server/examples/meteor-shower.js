@@ -9,7 +9,7 @@ export function register(api) {
   });
   function meteor() {
     const x = 260 + api.random() * 680;
-    const y = 320 + api.random() * 260;
+    const y = 470 + api.random() * 100;
     api.fx.telegraph(x, y, 55, 30);
     api.schedule("impact", 30, { x, y });
   }

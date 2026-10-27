@@ -32,8 +32,8 @@ export function register(api) {
     range: 18,
   });
   api.on("wave_start", (event) => {
-    if (event.wave % 3 === 0) {
-      api.spawn("slime-king", 80, 340);
+    if (event.wave % 5 === 0) {
+      api.spawn("slime-king", 80, 510);
       api.fx.banner("THE SLIME KING APPROACHES");
     }
   });

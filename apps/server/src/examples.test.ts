@@ -31,17 +31,18 @@ it("telegraphs and impacts a subscriber-triggered meteor", async () => {
   }
 });
 
-it("spawns the slime king every third wave and splits it on death", async () => {
+it("spawns the slime king every fifth wave and splits it on death", async () => {
   const world = new World(3);
   const host = new ModHost(world);
   try {
     await host.load("slime-king", await source("slime-king"));
-    host.dispatch({ type: "wave_start", wave: 3 });
+    host.dispatch({ type: "wave_start", wave: 5 });
     const king = world.state.entities.find(
       (entity) => entity.kind === "slime-king",
     );
     expect(king).toBeDefined();
     if (!king) throw new Error("King missing");
+    world.state.tick += 60; // Entrance grace ends before damage is enabled.
     world.damage(king, 1000);
     for (const event of world.drainEvents()) host.dispatch(event);
     expect(
@@ -81,7 +82,7 @@ it("equips the declared weapon and fires its custom projectile with real combat 
       kind: "hero",
       team: "hero",
       x: 100,
-      y: 200,
+      y: 510,
       speed: 0,
       hp: 1000,
     });
@@ -89,7 +90,7 @@ it("equips the declared weapon and fires its custom projectile with real combat 
       kind: "target",
       team: "enemy",
       x: 180,
-      y: 200,
+      y: 510,
       speed: 0,
       hp: 1000,
       damage: 0,

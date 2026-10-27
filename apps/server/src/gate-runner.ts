@@ -4,6 +4,7 @@ import type { GateReport } from "../../../packages/shared/src/forge.js";
 export function runGate(
   input: GateInput,
   signal: AbortSignal,
+  onCheck?: (check: GateReport["checks"][number]) => void,
 ): Promise<GateReport> {
   return new Promise((resolve, reject) => {
     signal.throwIfAborted();
@@ -24,10 +25,21 @@ export function runGate(
       reject(Error("Gatekeeper exceeded 45 seconds"));
     }, 45000);
     signal.addEventListener("abort", abort, { once: true });
-    worker.once("message", (report: GateReport) => {
-      finish();
-      resolve(report);
-    });
+    worker.on(
+      "message",
+      (
+        message:
+          | { type: "check"; check: GateReport["checks"][number] }
+          | { type: "result"; report: GateReport },
+      ) => {
+        if (message.type === "check") {
+          onCheck?.(message.check);
+          return;
+        }
+        finish();
+        resolve(message.report);
+      },
+    );
     worker.once("error", (error) => {
       finish();
       reject(error);

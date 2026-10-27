@@ -1,7 +1,7 @@
 /** The simulation advances only when tick() is called; one tick is 1/30 second. */
 export const TICK_RATE = 30;
 export const MAX_ENTITIES = 1000;
-export const KEEP = { x: 600, y: 337 } as const;
+export const KEEP = { x: 600, y: 475 } as const;
 
 export const RULE_BOUNDS = {
   waveSize: { min: 1, max: 100, initial: 6 },
@@ -14,7 +14,7 @@ export const RULE_BOUNDS = {
 } as const;
 export type RuleKey = keyof typeof RULE_BOUNDS;
 export type Rules = Record<RuleKey, number>;
-export type Team = "hero" | "enemy" | "projectile";
+export type Team = "hero" | "enemy" | "projectile" | "prop";
 export type Behavior = "wander" | "chase" | "orbit" | "ranged" | "guard";
 export interface Entity {
   id: number;
@@ -42,6 +42,9 @@ export interface Entity {
   lifetime?: number;
   weapon?: string;
   gold: number;
+  bornTick?: number;
+  scale?: number;
+  hat?: string;
 }
 export interface ProjectileSpec {
   speed: number;
@@ -96,6 +99,7 @@ export interface SpawnOptions {
   viewer?: string;
   ownerId?: number;
   lifetime?: number;
+  scale?: number;
 }
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const distance2 = (
@@ -179,7 +183,11 @@ export class World {
     const limit = entity.behavior === "guard" ? 220 : 1800;
     for (let radius = 80; radius < limit * 2; radius *= 2) {
       this.nearby(entity.x, entity.y, Math.min(limit, radius), (candidate) => {
-        if (candidate.team === "projectile" || candidate.team === entity.team)
+        if (
+          candidate.team === "projectile" ||
+          candidate.team === "prop" ||
+          candidate.team === entity.team
+        )
           return;
         const d = distance2(entity, candidate);
         if (
@@ -242,6 +250,8 @@ export class World {
       level: 1,
       kills: 0,
       gold: 0,
+      bornTick: this.state.tick,
+      scale: options.scale ?? 1,
       tags: [],
       ...(options.viewer === undefined
         ? {}
@@ -289,7 +299,7 @@ export class World {
       kind: "hero",
       team: "hero",
       x: KEEP.x + (this.random() - 0.5) * 300,
-      y: KEEP.y + 105 + this.random() * 100,
+      y: KEEP.y + this.random() * 95,
       hp: 100,
       speed: 1.6,
       damage: 10,
@@ -330,14 +340,26 @@ export class World {
     this.state.wave++;
     this.state.pendingEnemies = Math.min(
       100,
-      Math.floor(this.state.rules.waveSize + (this.state.wave - 1) * 2),
+      Math.floor(
+        this.state.rules.waveSize +
+          (this.state.wave - 1) * 2 +
+          this.state.entities.filter((e) => e.team === "hero").length * 1.2,
+      ),
     );
-    this.state.spawnCountdown = 0;
+    this.state.spawnCountdown = -2;
     this.state.events.push({ type: "wave_start", wave: this.state.wave });
     this.state.fx.push({ type: "banner", text: `Wave ${this.state.wave}` });
   }
   damage(target: Entity, amount: number, source?: Entity): void {
     if (target.hp <= 0) return;
+    // Give newly forged creatures a readable entrance before either side can fight.
+    if (
+      target.bornTick !== undefined &&
+      this.state.tick - target.bornTick < 60 &&
+      target.tags.some((t) => t.startsWith("mod:")) &&
+      target.team !== "projectile"
+    )
+      return;
     target.hp -= amount;
     this.state.fx.push({ type: "damage", x: target.x, y: target.y, amount });
     if (target.hp <= 0 && target.team === "enemy") {
@@ -362,6 +384,14 @@ export class World {
           source.maxHp += 10;
           source.hp = source.maxHp;
           source.damage += 2;
+          this.state.fx.push({
+            type: "ring",
+            x: source.x,
+            y: source.y,
+            radius: 45,
+            ticks: 30,
+            color: "#ffe5a3",
+          });
         }
       }
     }
@@ -375,15 +405,17 @@ export class World {
       state.entities.length < MAX_ENTITIES &&
       state.spawnCountdown-- <= 0
     ) {
-      const angle = this.random() * Math.PI * 2;
+      const heroes = state.entities.filter((e) => e.team === "hero").length;
+      const boss = state.wave % 5 === 0 && state.spawnCountdown < -1;
       this.spawn({
-        kind: "slime",
+        kind: boss ? "slime-king" : "slime",
         team: "enemy",
-        x: KEEP.x + Math.cos(angle) * 600,
-        y: KEEP.y + Math.sin(angle) * 380,
-        hp: 20 + state.wave * 3,
-        speed: 0.7 * state.rules.enemySpeedMultiplier,
-        damage: 5,
+        x: this.random() < 0.5 ? 0 : 1200,
+        y: 470 + this.random() * 100,
+        hp: (30 + state.wave * 5 + heroes * 2) * (boss ? 6 : 1),
+        speed: (boss ? 0.8 : 1.1) * state.rules.enemySpeedMultiplier,
+        damage: boss ? 12 : 4,
+        scale: boss ? 2.5 : 1,
         range: 18,
       });
       state.pendingEnemies--;
@@ -398,6 +430,11 @@ export class World {
           modCounts.set(tag, (modCounts.get(tag) ?? 0) + 1);
     for (const entity of entities) {
       if (entity.hp <= 0) continue;
+      if (entity.team === "prop") {
+        if (entity.lifetime !== undefined && --entity.lifetime <= 0)
+          entity.hp = 0;
+        continue;
+      }
       if (
         entity.team === "hero" &&
         entity.lastActiveTick !== undefined &&
@@ -414,18 +451,43 @@ export class World {
         const owner = this.byId.get(entity.ownerId ?? -1);
         let target: Entity | undefined;
         this.nearby(entity.x, entity.y, 10, (e) => {
-          if (!target && e.team !== "projectile" && e.team !== owner?.team)
+          if (
+            !target &&
+            e.team !== "projectile" &&
+            e.team !== "prop" &&
+            e.team !== owner?.team
+          )
             target = e;
         });
         if (target) {
           this.damage(target, entity.damage, owner);
           entity.hp = 0;
         }
-        if (entity.lifetime <= 0) entity.hp = 0;
+        if (
+          entity.lifetime <= 0 ||
+          entity.x < -200 ||
+          entity.x > 1400 ||
+          entity.y < -200 ||
+          entity.y > 875
+        )
+          entity.hp = 0;
         continue;
       }
+      if (
+        entity.bornTick !== undefined &&
+        state.tick - entity.bornTick < 60 &&
+        entity.tags.some((t) => t.startsWith("mod:"))
+      )
+        continue;
       if (entity.cooldown > 0) entity.cooldown--;
       let target = this.nearest(entity);
+      // Siege units keep marching; chasing a remote hero must not stall the wave.
+      if (
+        entity.team === "enemy" &&
+        target &&
+        distance2(entity, target) > 90 ** 2
+      )
+        target = undefined;
       if (
         entity.team === "hero" &&
         entity.behavior === "guard" &&
@@ -435,10 +497,9 @@ export class World {
         target = undefined;
       let destination: { x: number; y: number } = target ?? KEEP;
       if (!target && entity.team === "hero" && entity.behavior === "guard") {
-        const angle = state.tick / 200 + entity.id * 2.4;
         destination = {
-          x: KEEP.x + Math.cos(angle) * (80 + (entity.id % 5) * 15),
-          y: KEEP.y + 135 + Math.sin(angle) * 40,
+          x: 360 + (entity.id % 12) * 44,
+          y: 480 + (Math.floor(entity.id / 12) % 3) * 38,
         };
       }
       if (!target && entity.behavior === "wander") {
@@ -535,6 +596,8 @@ export class World {
       }
       entity.x += entity.vx;
       entity.y += entity.vy;
+      entity.x = Math.max(-200, Math.min(1400, entity.x));
+      entity.y = Math.max(455, Math.min(610, entity.y));
       if (
         entity.team === "enemy" &&
         distance2(entity, KEEP) < 24 ** 2 &&
@@ -559,7 +622,12 @@ export class World {
       state.pendingEnemies = 0;
       state.entities = state.entities.filter((e) => e.team !== "enemy");
       this.reindex();
-      state.fx.push({ type: "banner", text: "The keep rises again!" });
+      state.fx.push({
+        type: "banner",
+        text: "THE KEEP HAS FALLEN — REBUILDING",
+        ticks: 150,
+      });
+      state.fx.push({ type: "flash", color: "#ff6048", ticks: 20 });
     }
     if (
       state.pendingEnemies === 0 &&

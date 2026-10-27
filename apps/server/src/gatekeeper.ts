@@ -11,6 +11,7 @@ import {
   type GateReport,
 } from "../../../packages/shared/src/forge.js";
 import { ModHost } from "./mod-host.js";
+import { invariantFailure } from "../../../packages/engine/src/invariants.js";
 
 type Ast = Node & Record<string, unknown>;
 const forbidden = new Set([
@@ -172,8 +173,52 @@ export interface GateInput {
   source: string;
   checkpoint: WorldState;
   commands: string[];
+  baselineOnly?: boolean;
+  spectacle?: boolean;
 }
-export async function gatekeeper(input: GateInput): Promise<GateReport> {
+export async function checkBaseline(
+  checkpoint: WorldState,
+): Promise<string | undefined> {
+  const host = new ModHost(new World());
+  try {
+    await host.load("baseline-init", "export function register(api){}");
+    host.restore(checkpoint);
+    for (let i = 0; i < 8; i++)
+      host.world.joinViewer(`Gate${i}`, `gate:${i}`, true);
+    for (let tick = 0; tick <= 900; tick++) {
+      const failure = invariantFailure(host.world.state);
+      if (failure) return failure;
+      if (tick === 900) break;
+      host.tick();
+      if (tick >= 300 && tick % 150 === 0)
+        for (const type of [
+          "wave_start",
+          "wave_end",
+          "twitch:sub",
+          "twitch:cheer",
+          "twitch:raid",
+          "twitch:follow",
+        ])
+          host.dispatch({
+            type,
+            wave: 3 + tick / 150,
+            count: 5,
+            viewer: "Gate",
+            userId: "gate:0",
+            source: "simulator",
+          });
+      if (host.diagnostics.length)
+        return `live mod ${host.diagnostics[0]!.modId}: ${host.diagnostics[0]!.message}`;
+      host.world.drainFx();
+    }
+  } finally {
+    host.dispose();
+  }
+}
+export async function gatekeeper(
+  input: GateInput,
+  onCheck?: (check: GateReport["checks"][number]) => void,
+): Promise<GateReport> {
   const start = performance.now();
   const report: GateReport = {
     ok: false,
@@ -183,10 +228,30 @@ export async function gatekeeper(input: GateInput): Promise<GateReport> {
     durationMs: 0,
     effects: 0,
   };
-  let phase = "static contract";
+  const checked = (check: GateReport["checks"][number]) => {
+    report.checks.push(check);
+    onCheck?.(check);
+  };
+  let phase = "baseline (host responsibility)";
   try {
+    const baseline = await checkBaseline(input.checkpoint);
+    if (baseline) {
+      report.hostFailure = true;
+      throw Error(baseline);
+    }
+    checked({
+      name: phase,
+      ok: true,
+      detail: "900 ticks with live mods; host invariants valid",
+    });
+    if (input.baselineOnly) {
+      report.ok = true;
+      report.durationMs = Math.round(performance.now() - start);
+      return report;
+    }
+    phase = "static contract";
     const test = inspectMod(input.source);
-    report.checks.push({
+    checked({
       name: phase,
       ok: true,
       detail: "24 KiB / restricted AST / literal contract",
@@ -199,6 +264,10 @@ export async function gatekeeper(input: GateInput): Promise<GateReport> {
         kinds = new Set<string>(),
         rules = new Map<string, number>();
       let effects = 0;
+      const drawnSprites = new Set<string>(),
+        spawnedIds = new Set<number>();
+      let first = -1,
+        last = -1;
       try {
         // Initialize QuickJS before synchronous checkpoint re-registration.
         await host.load("gate-init", "export function register(api) {}");
@@ -212,7 +281,7 @@ export async function gatekeeper(input: GateInput): Promise<GateReport> {
           world.joinViewer(`Gate${i}`, `gate:${i}`, true);
         for (let tick = 0; tick < 900; tick++) {
           host.tick();
-          if (tick % 150 === 0) {
+          if (tick >= 300 && tick % 150 === 0) {
             for (const type of new Set([
               "wave_start",
               "wave_end",
@@ -238,12 +307,20 @@ export async function gatekeeper(input: GateInput): Promise<GateReport> {
           }
           if (host.diagnostics.length)
             throw Error(`Runtime rollback: ${host.diagnostics[0]!.message}`);
-          if (
-            world.state.entities.length > 1000 ||
-            !Number.isFinite(world.state.keepHp)
-          )
-            throw Error("World invariant failed");
+          const failure = invariantFailure(world.state);
+          if (failure) throw Error(failure);
           for (const entity of world.state.entities) {
+            if (entity.hat && host.ownsSprite(input.modId, entity.hat)) {
+              const sprite = host.sprites()[entity.hat]!;
+              if (
+                sprite.grid.length >= 12 &&
+                sprite.grid[0]!.length >= 12 &&
+                new Set(sprite.grid.join("").replaceAll(".", "")).size >= 4
+              )
+                drawnSprites.add(entity.hat);
+              if (first < 0) first = tick;
+              last = tick;
+            }
             if (
               ![entity.x, entity.y, entity.hp, entity.maxHp].every(
                 Number.isFinite,
@@ -253,9 +330,23 @@ export async function gatekeeper(input: GateInput): Promise<GateReport> {
               entity.y < -200 ||
               entity.y > 875
             )
-              throw Error("Entity invariant failed");
-            if (entity.tags.includes(`mod:${input.modId}`))
+              throw Error(
+                `tick=${world.state.tick} entity=${entity.id} kind=${entity.kind} x=${entity.x} y=${entity.y} hp=${entity.hp} maxHp=${entity.maxHp}`,
+              );
+            if (entity.tags.includes(`mod:${input.modId}`)) {
               kinds.add(entity.kind);
+              spawnedIds.add(entity.id);
+              const sprite = host.sprites()[entity.kind];
+              if (
+                sprite &&
+                sprite.grid.length >= 12 &&
+                sprite.grid[0]!.length >= 12 &&
+                new Set(sprite.grid.join("").replaceAll(".", "")).size >= 4
+              )
+                drawnSprites.add(entity.kind);
+              if (first < 0) first = tick;
+              last = tick;
+            }
           }
           for (const effect of world.drainFx())
             if (effect.modId === input.modId) {
@@ -270,6 +361,8 @@ export async function gatekeeper(input: GateInput): Promise<GateReport> {
               if (visible) {
                 fx.add(effect.type);
                 effects++;
+                if (first < 0) first = tick;
+                last = tick;
               }
             }
           for (const [key, value] of Object.entries(world.state.rules)) {
@@ -303,9 +396,36 @@ export async function gatekeeper(input: GateInput): Promise<GateReport> {
             "No observable candidate effects (or fewer than promised)",
           );
         report.effects = effects;
+        const commands = host.commands(input.modId).length,
+          durationSeconds = (last - first) / 30;
+        const score =
+          (first >= 0 && first <= 300 ? 2 : 0) +
+          (commands > 0 ? 2 : 0) +
+          (drawnSprites.size ? 3 : 0) +
+          (fx.size >= 3 && durationSeconds >= 3 ? 3 : 0);
+        report.spectacle = {
+          score,
+          fxTypes: fx.size,
+          sprites: drawnSprites.size,
+          entities: spawnedIds.size,
+          commands,
+          durationSeconds,
+        };
+        if (
+          input.spectacle &&
+          (score < 7 ||
+            first < 0 ||
+            first >= 300 ||
+            !drawnSprites.size ||
+            !commands ||
+            fx.size < 2)
+        )
+          throw Error(
+            `Too subtle: spectacle ${score}/10. Auto-introduce before 10s, draw a >=12x12 sprite using >=4 colors, register a command, layer >=2 visual FX, and stage telegraph/climax/aftermath over >=3s. Observed sprites=${drawnSprites.size}, commands=${commands}, FX=${fx.size}, firstTick=${first}.`,
+          );
         report.hashes.push(world.hash());
         report.ticks += 900;
-        report.checks.push({
+        checked({
           name: phase,
           ok: true,
           detail: `900 ticks; ${effects} observed effects; bounded world; no rollback`,
@@ -316,10 +436,10 @@ export async function gatekeeper(input: GateInput): Promise<GateReport> {
     }
     phase = "determinism";
     if (report.hashes[0] !== report.hashes[1]) throw Error("Hash mismatch");
-    report.checks.push({ name: phase, ok: true, detail: report.hashes[0]! });
+    checked({ name: phase, ok: true, detail: report.hashes[0]! });
     report.ok = true;
   } catch (error) {
-    report.checks.push({
+    checked({
       name: phase,
       ok: false,
       detail: (error instanceof Error ? error.message : String(error)).slice(

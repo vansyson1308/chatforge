@@ -8,6 +8,7 @@
     "pnpm": ">=10 <11"
   },
   "scripts": {
+    "clean:runtime": "node scripts/clean-runtime.mjs",
     "forge:dry-run": "pnpm --filter @chatforge/server forge:dry-run",
     "dev": "pnpm build && pnpm --parallel --filter @chatforge/server --filter @chatforge/overlay --filter @chatforge/dashboard dev",
     "build": "pnpm -r build",
@@ -20,7 +21,8 @@
     "smoke:openai": "pnpm --filter @chatforge/server smoke:openai",
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "test:fps": "node scripts/measure-overlay.mjs",
-    "start": "pnpm --filter @chatforge/server dev"
+    "start": "pnpm --filter @chatforge/server dev",
+    "forge:soak": "pnpm build && node scripts/soak-forge.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

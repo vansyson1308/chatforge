@@ -95,6 +95,9 @@ export class ModHost {
   sprites(): Record<string, PixelSprite> {
     return this.spritesByName;
   }
+  ownsSprite(id: string, name: string): boolean {
+    return this.definitionOwners.get(name) === id;
+  }
   commands(id: string): string[] {
     return Object.keys(this.mods.get(id)?.declarations.commands ?? {});
   }
@@ -194,7 +197,18 @@ export class ModHost {
         [...this.definitionOwners.values()].filter((v) => v === id).length >= 32
       )
         throw Error("Definition budget exceeded");
-      if (op === "defineEnemy") {
+      if (op === "defineHat") {
+        if (!validateSprite(spec.sprite)) throw Error("Invalid hat sprite");
+        this.spritesByName[name] = spec.sprite;
+      } else if (op === "defineEnemy" || op === "defineProp") {
+        if (op === "defineProp")
+          Object.assign(spec, {
+            hp: 1,
+            speed: 0,
+            damage: 0,
+            behavior: "guard",
+            team: "prop",
+          });
         if (!validateSprite(spec.sprite)) throw Error("Invalid sprite");
         if (
           !["wander", "chase", "orbit", "ranged", "guard"].includes(
@@ -203,6 +217,9 @@ export class ModHost {
         )
           throw Error("Invalid behavior");
         const safe: EntityDefinition = {
+          team:
+            spec.team === "hero" || spec.team === "prop" ? spec.team : "enemy",
+          scale: finite(spec.scale ?? 1, 0.5, 4),
           sprite: spec.sprite,
           hp: finite(spec.hp, 1, 5000),
           speed: finite(spec.speed, 0, 10),
@@ -308,7 +325,7 @@ export class ModHost {
       const entity = {
         id: tx.nextId++,
         kind: name,
-        team: "enemy",
+        team: options.team,
         x: options.x,
         y: options.y,
         hp: options.hp!,
@@ -350,7 +367,18 @@ export class ModHost {
       const entityId = finite(args[0], 1, Number.MAX_SAFE_INTEGER),
         entity = this.world.byId.get(entityId) ?? tx.spawned.get(entityId);
       if (!entity) throw Error("Unknown entity");
-      if (op === "entity.equip") {
+      if (op === "entity.equipHat") {
+        const name = named(args[1]);
+        if (
+          entity.team !== "hero" ||
+          this.definitionOwners.get(name) !== id ||
+          !this.spritesByName[name]
+        )
+          throw Error("Unknown hero hat");
+        this.append(() => {
+          this.world.byId.get(entityId)!.hat = name;
+        });
+      } else if (op === "entity.equip") {
         const name = named(args[1]);
         if (
           entity.team !== "hero" ||
@@ -390,6 +418,53 @@ export class ModHost {
       return c;
     };
     switch (op) {
+      case "sfx":
+        fx.type = "sfx";
+        fx.cue = text(args[0], 20);
+        if (!["anvil", "thunder", "magic", "cheer"].includes(String(fx.cue)))
+          throw Error("Unknown sound cue");
+        break;
+      case "fx.text":
+        fx.x = finite(args[0], -200, 1400);
+        fx.y = finite(args[1], -200, 875);
+        fx.text = text(args[2], 80);
+        fx.ticks = 60;
+        break;
+      case "fx.ring":
+        fx.x = finite(args[0], -200, 1400);
+        fx.y = finite(args[1], -200, 875);
+        fx.radius = finite(args[2], 1, 250);
+        fx.color = color(args[3]);
+        fx.ticks = finite(args[4], 1, 180);
+        break;
+      case "fx.beam":
+      case "fx.lightning":
+        fx.x = finite(args[0], -200, 1400);
+        fx.y = finite(args[1], -200, 875);
+        fx.x2 = finite(args[2], -200, 1400);
+        fx.y2 = finite(args[3], -200, 875);
+        fx.color = op === "fx.beam" ? color(args[4]) : "#b3e8ff";
+        fx.ticks = op === "fx.beam" ? finite(args[5], 1, 90) : 18;
+        break;
+      case "fx.flash":
+        fx.color = color(args[0]);
+        fx.ticks = finite(args[1], 1, 30);
+        break;
+      case "fx.trail":
+        fx.entityId = finite(args[0], 1, Number.MAX_SAFE_INTEGER);
+        fx.color = color(args[1]);
+        fx.ticks = finite(args[2], 1, 180);
+        break;
+      case "fx.sky":
+        fx.theme = text(args[0], 20);
+        if (
+          !["blood-moon", "sunset", "aurora", "storm"].includes(
+            String(fx.theme),
+          )
+        )
+          throw Error("Unknown sky");
+        fx.ticks = finite(args[1], 1, 30) * 30;
+        break;
       case "log": {
         const message = text(args[0], 200);
         this.append(() =>

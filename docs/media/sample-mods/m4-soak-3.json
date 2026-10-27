@@ -1,0 +1,134 @@
+{
+  "round": 3,
+  "card": {
+    "spectacle": {
+      "visibleWithinSeconds": 1,
+      "chatInvolvement": true,
+      "customSprite": true,
+      "timedEvent": true,
+      "score": 10
+    },
+    "title": "The Fast and the Flourious",
+    "pitch": "A pizza portal delivers one hero a custom pizza-throwing weapon.",
+    "visualHook": "A glowing oven-red circle erupts into a pixel pizza launcher and flying pizza slices.",
+    "acceptance": [
+      "On deploy and via !pizza, show a telegraph immediately; after 30 ticks equip one available hero with the custom pizza-projectile weapon.",
+      "After 150 ticks, show a celebratory impact ring; the equipped weapon remains in place.",
+      "If no hero is available, show the telegraph and aftermath without equipping anyone. Limit activation to once every 10 seconds."
+    ],
+    "commands": [
+      "!pizza"
+    ],
+    "credits": [
+      {
+        "id": "sim-17",
+        "name": "CloudCrafter",
+        "source": "simulator"
+      },
+      {
+        "id": "sim-12",
+        "name": "SparkSage",
+        "source": "simulator"
+      },
+      {
+        "id": "sim-9",
+        "name": "GearGnome",
+        "source": "simulator"
+      }
+    ],
+    "feasibility": "Define a hero weapon and pizza projectile; use scheduled effects and bounded hero selection.",
+    "risk": "Low: affects at most one hero per activation; no temporary equipment restoration is required.",
+    "suggestion": false,
+    "ideaIds": [
+      20,
+      29,
+      94
+    ]
+  },
+  "report": {
+    "ok": true,
+    "checks": [
+      {
+        "name": "baseline (host responsibility)",
+        "ok": true,
+        "detail": "900 ticks with live mods; host invariants valid"
+      },
+      {
+        "name": "static contract",
+        "ok": true,
+        "detail": "24 KiB / restricted AST / literal contract"
+      },
+      {
+        "name": "simulation 1",
+        "ok": true,
+        "detail": "900 ticks; 46 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "simulation 2",
+        "ok": true,
+        "detail": "900 ticks; 46 observed effects; bounded world; no rollback"
+      },
+      {
+        "name": "determinism",
+        "ok": true,
+        "detail": "c54c872c"
+      }
+    ],
+    "hashes": [
+      "c54c872c",
+      "c54c872c"
+    ],
+    "ticks": 1800,
+    "durationMs": 2169,
+    "effects": 46,
+    "spectacle": {
+      "score": 10,
+      "fxTypes": 9,
+      "sprites": 2,
+      "entities": 7,
+      "commands": 1,
+      "durationSeconds": 29
+    }
+  },
+  "buildSeconds": 41.954,
+  "attempts": 1,
+  "threadId": "01a17d28-dc88-7ed0-a8f8-3bd12a9a5245",
+  "timeline": [
+    {
+      "stage": "IDLE",
+      "time": 1793101307809
+    },
+    {
+      "stage": "COLLECTING",
+      "time": 1793101307849
+    },
+    {
+      "stage": "CURATING",
+      "time": 1793101358714
+    },
+    {
+      "stage": "VOTING",
+      "time": 1793101383012
+    },
+    {
+      "stage": "STREAMER_APPROVAL",
+      "time": 1793101413347
+    },
+    {
+      "stage": "BUILDING",
+      "time": 1793101423436
+    },
+    {
+      "stage": "TESTING",
+      "time": 1793101462275
+    },
+    {
+      "stage": "DEPLOYING",
+      "time": 1793101465113
+    },
+    {
+      "stage": "LIVE",
+      "time": 1793101465292
+    }
+  ]
+}

@@ -1,6 +1,10 @@
 import { parentPort } from "node:worker_threads";
 import { World } from "../../../packages/engine/src/index.js";
 import { ModHost, type HostCheckpoint } from "./mod-host.js";
+import {
+  healWorld,
+  invariantFailure,
+} from "../../../packages/engine/src/invariants.js";
 import type { RenderSnapshot } from "../../../packages/shared/src/protocol.js";
 
 if (!parentPort) throw new Error("Simulation must run in a worker thread");
@@ -41,6 +45,8 @@ const send = () => {
       e.level,
       e.lastActiveTick ?? 0,
       e.simulated ?? false,
+      e.scale ?? 1,
+      e.hat ?? "",
     ]),
     fx: fx.slice(-2000),
     sprites: host.sprites(),
@@ -67,10 +73,28 @@ port.on(
         let result: unknown;
         switch (message.type) {
           case "checkpoint":
+            {
+              const failure = invariantFailure(world.state);
+              if (failure) {
+                const repairs = healWorld(world.state);
+                world.reindex();
+                console.error(
+                  "HOST WORLD REPAIRED:",
+                  failure,
+                  repairs.join("; "),
+                );
+              }
+            }
             result = host.exportCheckpoint();
             break;
           case "restore":
             host.importCheckpoint(message.checkpoint as HostCheckpoint);
+            {
+              const repairs = healWorld(world.state);
+              world.reindex();
+              if (repairs.length)
+                console.error("LEGACY WORLD REPAIRED:", repairs.join("; "));
+            }
             break;
           case "baseline":
             host.markBaseline();

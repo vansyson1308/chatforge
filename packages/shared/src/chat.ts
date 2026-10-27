@@ -34,7 +34,15 @@ export const ideaSchema = z.object({
   author: z.string(),
   userId: z.string(),
   text: z.string(),
-  status: z.enum(["pending", "accepted", "rejected"]),
+  status: z.enum([
+    "pending",
+    "accepted",
+    "merged",
+    "used",
+    "not chosen",
+    "rejected",
+  ]),
+  reason: z.string().optional(),
   createdAt: z.number(),
   source: sourceSchema,
 });
