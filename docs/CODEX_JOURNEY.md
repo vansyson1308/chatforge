@@ -38,10 +38,12 @@ Validation evidence on Windows / Node 24.14.0 / pnpm 10.18.2:
 | Simulation max                          | 3.096 ms |   ≤25 ms |
 | Overlay average FPS                     |    96.77 |      ≥58 |
 | Overlay p5 FPS                          |    71.43 |      ≥50 |
-| Minimum entities during 10 s FPS sample |      301 |     ≥300 |
+| Minimum entities during 10 s FPS sample |      304 |     ≥300 |
 
 Simulation suite: 900 measured ticks, 120 warm-up ticks, three active mods with sub/raid events and periodic checkpoints. Slow-tick diagnostics also report thread CPU time to distinguish OS scheduling pauses. Earlier runs failed during profiling; the latest isolated run passed all unchanged gates. Installed Chrome's rAF cadence on this machine can exceed 60 Hz; these are measured rates, not a frame cap. Unit/security suites are sequential to reduce timing contention. CI runs unit/security, isolated perf (×3 thresholds) and builds on Windows and Ubuntu. Final CI run link is recorded in the task report.
 
 Codex Builder remains `@openai/codex-sdk` 0.164.0 + ChatGPT login + explicit `gpt-6.1-sol`; prior successful smoke thread `01a17c46-b6c6-7be3-aa76-4cc47ba72978`, output `FORGE_OK`. No new paid AI call was needed for this QC pass. M1 is complete; M2 Twitch/Crowd Sim is next and has not started.
 
 Final local checks: frozen install, typecheck, lint, 74 unit/security tests, isolated performance test, build and installed-Chrome FPS gate passed. Both development servers were stopped after browser verification. No model/API key or global Codex setting was changed.
+
+CI for implementation commit 5c294a8 passed on both OSes: [run 40475056652](https://github.com/vansyson1308/chatforge/actions/runs/40475056652). CI performance (avg / p95 / p99 / max): Ubuntu 0.282 / 0.512 / 0.955 / 4.140 ms; Windows 0.166 / 0.343 / 0.933 / 2.313 ms. Generated dist folders and Vite caches were removed; no listeners remained on ports 3000/5173. Chrome profiles from this task were removed automatically on browser close.
