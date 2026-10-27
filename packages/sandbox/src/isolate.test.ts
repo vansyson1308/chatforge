@@ -44,4 +44,15 @@ describe("isolated QuickJS primitive", () => {
       mod.dispose();
     }
   });
+  it("rejects imported host modules", async () => {
+    const mod = await ModIsolate.create("imports", { budgetMs: 500 });
+    try {
+      expect(() =>
+        mod.evaluate('import fs from "node:fs"; globalThis.fs = fs', 500, true),
+      ).toThrow(ModExecutionError);
+      expect(mod.evaluate("typeof globalThis.fs")).toBe("undefined");
+    } finally {
+      mod.dispose();
+    }
+  });
 });

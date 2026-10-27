@@ -179,8 +179,8 @@ export class World {
     const hero = this.spawn({
       kind: "hero",
       team: "hero",
-      x: KEEP.x + (this.random() - 0.5) * 80,
-      y: KEEP.y + (this.random() - 0.5) * 80,
+      x: KEEP.x + (this.random() - 0.5) * 300,
+      y: KEEP.y + 105 + this.random() * 100,
       hp: 100,
       speed: 1.6,
       damage: 10,
@@ -222,7 +222,8 @@ export class World {
     this.state.events.push({ type: "wave_start", wave: this.state.wave });
     this.state.fx.push({ type: "banner", text: `Wave ${this.state.wave}` });
   }
-  private damage(target: Entity, amount: number, source?: Entity): void {
+  damage(target: Entity, amount: number, source?: Entity): void {
+    if (target.hp <= 0) return;
     target.hp -= amount;
     this.state.fx.push({ type: "damage", x: target.x, y: target.y, amount });
     if (target.hp <= 0 && target.team === "enemy") {
@@ -297,14 +298,28 @@ export class World {
       const opponents = entities.filter(
         (e) => e.hp > 0 && e.team !== "projectile" && e.team !== entity.team,
       );
-      const target = opponents.reduce<Entity | undefined>(
+      let target = opponents.reduce<Entity | undefined>(
         (best, candidate) =>
           !best || distance2(entity, candidate) < distance2(entity, best)
             ? candidate
             : best,
         undefined,
       );
+      if (
+        entity.team === "hero" &&
+        entity.behavior === "guard" &&
+        target &&
+        distance2(entity, target) > 220 ** 2
+      )
+        target = undefined;
       let destination: { x: number; y: number } = target ?? KEEP;
+      if (!target && entity.team === "hero" && entity.behavior === "guard") {
+        const angle = state.tick / 200 + entity.id * 2.4;
+        destination = {
+          x: KEEP.x + Math.cos(angle) * (80 + (entity.id % 5) * 15),
+          y: KEEP.y + 135 + Math.sin(angle) * 40,
+        };
+      }
       if (
         !target &&
         (entity.behavior === "wander" || entity.behavior === "orbit")

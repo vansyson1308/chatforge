@@ -64,8 +64,12 @@ export interface ModApi {
   ): void;
   every(ticks: number, handler: () => void): void;
   after(ticks: number, handler: () => void): void;
-  rules: { set(key: RuleKey, value: number): number };
+  rules: {
+    get(key: RuleKey): number;
+    set(key: RuleKey, value: number): number;
+  };
   fx: {
+    telegraph(x: number, y: number, radius: number, ticks: number): void;
     shake(intensity: number, ticks: number): void;
     particles(x: number, y: number, color: string, count: number): void;
     banner(text: string): void;

@@ -19,7 +19,7 @@ Update this status when milestones change. Do not build ahead without an explici
 Target Windows 11, PowerShell, Node 24 and pnpm 10. Never write bash-only scripts. Corepack can select the pinned pnpm version with `corepack pnpm@10.18.2` if the global pnpm is different.
 
 - Install: `pnpm install --frozen-lockfile`
-- Dev: `pnpm dev` (M0 placeholders only; no product server yet)
+- Dev: `pnpm dev` (builds, then starts the localhost server and Vite overlay)
 - Build: `pnpm build`
 - Typecheck: `pnpm typecheck`
 - Lint: `pnpm lint`

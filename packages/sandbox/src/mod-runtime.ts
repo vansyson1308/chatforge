@@ -54,9 +54,9 @@ const bootstrap = `
     },
     every: (interval, fn) => schedule(interval, fn, true),
     after: (interval, fn) => schedule(interval, fn, false),
-    rules: Object.freeze({ set: (key, value) => host('rules.set', key, value) }),
+    rules: Object.freeze({ get: (key) => host('rules.get', key), set: (key, value) => host('rules.set', key, value) }),
     fx: Object.freeze({
-      shake: (...args) => host('fx.shake', ...args), particles: (...args) => host('fx.particles', ...args),
+      telegraph: (...args) => host('fx.telegraph', ...args), shake: (...args) => host('fx.shake', ...args), particles: (...args) => host('fx.particles', ...args),
       banner: (...args) => host('fx.banner', ...args), tint: (...args) => host('fx.tint', ...args), weather: (...args) => host('fx.weather', ...args),
     }),
     random: () => host('random'), state, log: (message) => host('log', message),
