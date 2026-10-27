@@ -49,3 +49,45 @@ describe("deterministic simulation", () => {
     ).toBe(true);
   });
 });
+
+it("separates stacked heroes and awards loot/progression on a credited kill", () => {
+  const world = new World(1);
+  const a = world.spawn({
+      kind: "hero",
+      team: "hero",
+      x: 600,
+      y: 450,
+      speed: 0,
+    }),
+    b = world.spawn({ kind: "hero", team: "hero", x: 600, y: 450, speed: 0 });
+  world.tick();
+  expect(Math.abs(a.x - b.x)).toBeGreaterThan(0);
+  for (let i = 0; i < 3; i++) {
+    const enemy = world.spawn({
+      kind: "target",
+      team: "enemy",
+      x: 600,
+      y: 450,
+      hp: 1,
+    });
+    world.damage(enemy, 10, a);
+  }
+  expect(a.level).toBe(2);
+  expect(a.gold).toBeGreaterThan(0);
+  expect(world.state.fx.some((f) => f.type === "loot")).toBe(true);
+  world.state.keepHp = 0;
+  world.tick();
+  expect(world.state.keepHp).toBe(100);
+  expect(world.state.cycle).toBe(2);
+});
+it("restores the entity index and spatial queries", () => {
+  const world = new World(1);
+  const hero = world.joinViewer("Ada")!;
+  const saved = world.snapshot();
+  world.state.entities = [];
+  world.restore(saved);
+  expect(world.byId.get(hero.id)?.viewer).toBe("Ada");
+  const found: number[] = [];
+  world.nearby(hero.x, hero.y, 1, (e) => found.push(e.id));
+  expect(found).toEqual([hero.id]);
+});

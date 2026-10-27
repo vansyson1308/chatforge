@@ -15,7 +15,7 @@ try {
   await mkdir("docs/media", { recursive: true });
   await page.screenshot({ path: "docs/media/forge-keep-full.png" });
   await page.keyboard.press("s");
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(650);
   await page.screenshot({ path: "docs/media/forge-keep-meteor.png" });
   console.log("Saved full-mode and meteor screenshots to docs/media/.");
 } finally {

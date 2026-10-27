@@ -1,3 +1,3 @@
-/** engine workspace placeholder; product functionality arrives in later milestones. */
+/** Deterministic Forge Keep simulation and checkpoint types. */
 export const workspaceName = "@chatforge/engine";
 export * from "./world.js";

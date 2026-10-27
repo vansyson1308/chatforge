@@ -44,18 +44,36 @@ export interface EntityView {
   maxHp: number;
   tags: string[];
 }
+export interface ProjectileDefinition {
+  sprite: PixelSprite;
+  speed: number;
+  damage: number;
+  lifetime: number;
+}
+export interface HeroWeaponDefinition {
+  damage: number;
+  range: number;
+  cooldown: number;
+  projectile?: string;
+}
 export interface EntityHandle extends EntityView {
   damage(amount: number): void;
   heal(amount: number): void;
   setSpeed(value: number): void;
   tag(name: string): void;
+  equip(weapon: string): void;
 }
 export interface ModApi {
   defineEnemy(name: string, definition: EntityDefinition): void;
-  defineHeroWeapon(name: string, definition: JsonValue): void;
-  defineProjectile(name: string, definition: JsonValue): void;
+  defineHeroWeapon(name: string, definition: HeroWeaponDefinition): void;
+  defineProjectile(name: string, definition: ProjectileDefinition): void;
   spawn(kind: string, x: number, y: number): EntityHandle | null;
-  query(filter: { team?: string; kind?: string; tag?: string }): EntityHandle[];
+  query(filter: {
+    team?: string;
+    kind?: string;
+    tag?: string;
+    limit?: number;
+  }): EntityHandle[];
   on(event: ModEventName, handler: (event: ModEvent) => void): void;
   registerCommand(
     name: string,
@@ -63,7 +81,8 @@ export interface ModApi {
     options: { cooldownSec: number },
   ): void;
   every(ticks: number, handler: () => void): void;
-  after(ticks: number, handler: () => void): void;
+  onSchedule(name: string, handler: (payload: JsonValue) => void): void;
+  schedule(name: string, delayTicks: number, payload: JsonValue): void;
   rules: {
     get(key: RuleKey): number;
     set(key: RuleKey, value: number): number;
@@ -75,6 +94,7 @@ export interface ModApi {
     banner(text: string): void;
     tint(color: string, ticks: number): void;
     weather(kind: Weather, ticks: number): void;
+    impact(x: number, y: number): void;
   };
   random(): number;
   state: Record<string, JsonValue>;

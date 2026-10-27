@@ -5,8 +5,8 @@
 ## Milestones and status
 
 - M0 Harness: complete.
-- M1 Engine, sandbox, seed game and Mod API: current milestone.
-- M2 Twitch and Crowd Sim.
+- M1 Engine, sandbox, seed game and Mod API: complete (current delivered milestone).
+- M2 Twitch and Crowd Sim: next, not started.
 - M3 Forge loop, AI, Gatekeeper and persistence.
 - M4 Overlay HUD, dashboard and game polish.
 - M5 Hardening, simulated-stream end-to-end test and performance.
@@ -23,7 +23,9 @@ Target Windows 11, PowerShell, Node 24 and pnpm 10. Never write bash-only script
 - Build: `pnpm build`
 - Typecheck: `pnpm typecheck`
 - Lint: `pnpm lint`
-- Test: `pnpm test`
+- Test: `pnpm test` (sequential unit/security suites)
+- Performance: `pnpm test:perf` (isolated; do not run other checks concurrently)
+- Browser FPS: `pnpm test:fps` (requires dev servers and installed Chrome; no downloads)
 - End-to-end: `pnpm test:e2e` (explicitly unavailable until M5)
 - Format: `pnpm format`
 - Feasibility: `pnpm smoke:codex` and `pnpm smoke:openai`

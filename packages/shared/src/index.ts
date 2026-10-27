@@ -1,2 +1,3 @@
-/** shared workspace placeholder; product functionality arrives in later milestones. */
+/** Shared render protocol and validation schemas. */
 export const workspaceName = "@chatforge/shared";
+export * from "./protocol.js";

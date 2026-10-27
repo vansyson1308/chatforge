@@ -1,15 +1,14 @@
 import { expect, it } from "vitest";
 import { ModRuntime } from "./mod-runtime.js";
-
-it("dispatches events, bounded timers and command cooldowns through JSON host bindings", async () => {
+it("declares callbacks and restores only JSON state across realms", async () => {
   const calls: unknown[][] = [];
   const mod = await ModRuntime.load(
     "test",
     `export function register(api) {
-    api.state.count = 0;
-    api.on('twitch:sub', event => { api.state.count++; api.fx.banner(event.viewer); });
-    api.after(2, () => api.log('timer'));
-    api.registerCommand('!go', (viewer, args) => api.log(viewer + ':' + args), {cooldownSec: 1});
+    api.on('twitch:sub', event => { api.state.count = (api.state.count || 0)+1; api.fx.banner(event.viewer); });
+    api.every(2, () => api.log('timer'));
+    api.onSchedule('later', payload => api.log(payload.text));
+    api.registerCommand('!go', (viewer,args) => api.log(viewer+':'+args), {cooldownSec:1});
   }`,
     (_id, op, args) => {
       calls.push([op, ...args]);
@@ -18,16 +17,20 @@ it("dispatches events, bounded timers and command cooldowns through JSON host bi
     { budgetMs: 500 },
   );
   try {
-    mod.event({ type: "twitch:sub", viewer: "Ada" });
-    expect(mod.state()).toEqual({ count: 1 });
-    expect(mod.command("!go", "Ada", "now")).toBe(true);
-    expect(mod.command("!go", "Ada", "now")).toBe(false);
-    mod.event({ type: "tick" });
-    mod.event({ type: "tick" });
+    expect(mod.declarations.intervals).toEqual([2]);
+    expect(mod.declarations.commands["!go"]).toBe(30);
+    mod.restore({ count: 8 });
+    expect(mod.invoke("event", "twitch:sub", { viewer: "Ada" }, 500)).toEqual({
+      count: 9,
+    });
+    mod.invoke("command", "!go", { viewer: "Ada", args: "now" }, 500);
+    mod.invoke("timer", 0, null, 500);
+    mod.invoke("schedule", "later", { text: "saved payload" }, 500);
     expect(calls).toEqual([
       ["fx.banner", "Ada"],
       ["log", "Ada:now"],
       ["log", "timer"],
+      ["log", "saved payload"],
     ]);
   } finally {
     mod.dispose();

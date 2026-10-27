@@ -1,22 +1,80 @@
-# Mod API (M1 in progress)
+# Mod API v1 — authoring contract
 
-Write one ES module with `export function register(api)`. Code runs in its own QuickJS context; it has no Node, network, filesystem or wall clock access. Use `api.random()` for deterministic randomness and `api.state` for JSON data. This contract is still being implemented; `defineHeroWeapon` and `defineProjectile` are not available yet.
+Write a single ES module exporting `register(api)`. It runs in a separate QuickJS runtime, never in Node or the browser. No imports, network, filesystem, DOM, process, wall clock, `eval`, dynamic function constructors, async functions, Promises or native timers. Use synchronous callbacks, `api.random()` and simulation ticks (30 ticks = 1 second).
 
-`api.on(event, handler)` accepts `tick`, `wave_start`, `wave_end`, `hero_join`, `enemy_killed`, `keep_damaged`, `twitch:sub`, `twitch:cheer`, `twitch:raid`, and `twitch:follow`. Tick events have `tick`; wave events have `wave`; joins and Twitch dev events have `viewer`; enemy kills have `entityId`, `kind`, `x`, `y`. `api.every(ticks, fn)` and `api.after(ticks, fn)` schedule work at 30 ticks per second. `api.registerCommand('!name', fn, {cooldownSec})` passes viewer and arguments.
+## Declaration and persistence rules — read before writing a mod
 
-`api.defineEnemy(name, {sprite, hp, speed, damage, behavior, range})` registers a kind. `api.spawn(kind, x, y)` creates one and `api.query({team, kind, tag})` returns handles with `id`, `kind`, `team`, `x`, `y`, `hp`, `maxHp`, `tags`, plus `damage(n)`, `heal(n)`, `setSpeed(n)` and `tag(name)`. `api.rules.get(key)` and `.set(key, value)` read and clamp a rule. Rule names and bounds are in `packages/engine/src/world.ts`.
+**`register(api)` is a pure declaration phase.** Only `defineEnemy`, `defineProjectile`, `defineHeroWeapon`, `on`, `every`, `registerCommand` and `onSchedule` are allowed. Do not spawn, read the world, access `api.state`, emit FX or mutate rules during registration. Initialize state lazily inside a runtime callback.
 
-`api.fx` offers `banner(text)`, `shake(intensity, ticks)`, `particles(x, y, '#rrggbb', count)`, `telegraph(x, y, radius, ticks)`, `tint('#rrggbb', ticks)`, and `weather(kind, ticks)`, with kind `rain`, `snow`, `ash`, `meteor`, or `aurora`. `api.log(text)` records a diagnostic event.
+**Closures are ephemeral. Only JSON survives restart or rollback.** Put every persistent counter, flag and value in `api.state`. Functions, accessors, cycles, non-finite numbers and class instances are rejected. Do not save entity handles; save numeric IDs and re-query. State starts as `{}` on a new deployment and is restored after re-registration when resuming a checkpoint.
 
-Limits currently enforced: 4 MiB per isolate, 256 KiB stack, 50 ms per callback, 256 host operations per callback, 32 timers, 16 commands, 32 handlers per event, 32 enemy kinds and 100 living entities per mod, 16 active mods, 120 characters per banner, 100 particles per call and a 24×24 sprite with at most eight `#rrggbb` colors. Use `.` for transparent sprite cells. All host inputs are validated; rule values and effect coordinates are clamped. These limits and rollback behavior are still under M1 validation.
+`every(ticks, fn)` is declaration-only. Its next due tick and original declaration tick survive a checkpoint, so re-registration does not reset its phase. `after(ticks, fn)` has been removed. Use `onSchedule(name, handler)` in register and `schedule(name, delayTicks, jsonPayload)` at runtime. Pending schedules persist their name, due tick and payload. Schedules with the same name are separate entries, delivered in insertion order. A callback must return synchronously.
 
-Each example below is a complete independent mod:
+Each callback invocation (all listeners for one event, one command, one repeating timer, or one named schedule) creates a bounded command buffer. Validated writes apply together only after the callback and state validation succeed. Throwing, timeout, oversized state or a quota failure discards all writes and RNG advancement. Reads return detached views of the **live world before this buffer commits**; they do not see pending writes. A newly spawned handle has a reserved ID and can receive buffered operations, but does not appear in `query` until commit. Handles are snapshots, not live getters: re-query on the next callback.
+
+A failure restores that source version's complete pre-deploy checkpoint (including when a different mod was deployed later) and re-registers that mod set: entities, RNG, rules, sources/version, state, schedules, repeating phases and command cooldowns. Errors are separate diagnostics so they cannot alter the restored state hash. Successful worlds also checkpoint every 300 ticks for persistence and explicit last-good rollback. Unload removes owned definitions/entities and schedules; arbitrary effects on shared rules remain until changed or a whole-world checkpoint is restored. Replacing a mod starts its state/timers afresh; old owned entities remain until death/unload.
+
+## Definitions and entity handles
+
+- `defineEnemy(name, {sprite, hp, speed, damage, behavior, range?})`: `hp` 1–5000, speed 0–10, damage 0–500, range 1–500 (default 20). Behaviors: `wander`, `chase`, `orbit`, `ranged` (kite), `guard` (keep patrol).
+- `defineProjectile(name, {sprite, speed, damage, lifetime})`: speed 1–20 units/tick, damage 0–500, lifetime 1–300 ticks. Declare it before a weapon referencing it. Projectiles are fired automatically by equipped heroes; `spawn` creates enemy definitions only.
+- `defineHeroWeapon(name, {damage, range, cooldown, projectile?})`: damage 0–500, range 1–500, cooldown 1–300 ticks. Omit projectile for melee. Weapon damage overrides the projectile's base damage. All hero damage is multiplied by `heroDamageMultiplier`.
+- Sprite: `{grid: ['.aa.', 'aaaa'], palette: {a:'#ff8833'}}`; rectangular 1–24 cells on each axis, 1–8 single-character palette keys, six-digit hex colors, `.` transparent. Definitions share a global namespace; a mod may only spawn/equip/reference its own definitions.
+- `spawn(kind, x, y)` returns an enemy handle. Coordinates clamp to x −200…1400, y −200…875.
+- `query({team?, kind?, tag?, limit?})` returns up to 300 live handles (optional `limit` clamps to 1–300; use it to avoid copying unused entities) in stable entity order. Team is `hero`, `enemy` or `projectile`.
+- Handle fields: `id, kind, team, x, y, hp, maxHp, tags`. Methods: `damage(0…500)`, `heal(0…500)`, `setSpeed(0…10)`, `tag(name)`, `equip(weaponName)` (heroes only). Damage emits kill/progression/loot events through the same engine combat path.
+- Definition/schedule/tag names: `/^[a-z][a-z0-9_-]{0,39}$/`.
+
+## Events, commands, state and rules
+
+`on(name, fn)` accepts `tick`, `wave_start`, `wave_end`, `hero_join`, `enemy_killed`, `keep_damaged`, `twitch:sub`, `twitch:cheer`, `twitch:raid`, `twitch:follow`. Tick payload has `tick`; waves have `wave`; join has `entityId, viewer`; kills have `entityId, kind, x, y`; keep damage has `amount, hp`; dev Twitch events have `viewer`. Twitch wiring arrives in M2.
+
+`registerCommand('!name', (viewer, args) => {}, {cooldownSec})`: names match `!` plus 1–20 lowercase letters/digits/underscore. Cooldown 0–3600 seconds is **global per mod command**, persisted in ticks. Viewer/argument strings are capped at 40/200 characters.
+
+`random()` returns seeded `[0,1)`. `log(text)` emits a diagnostic event (200 characters). `state` is a mod-private JSON object, maximum 16 KiB UTF-8, depth 32, 4096 visited values. Store needed data there, not in outer variables.
+
+`rules.get(key)` reads and `rules.set(key, value)` clamps and returns the proposed value:
+
+| Rule                 | Minimum | Maximum | Default |
+| -------------------- | ------: | ------: | ------: |
+| waveSize             |       1 |     100 |       6 |
+| enemySpeedMultiplier |     0.1 |       4 |       1 |
+| spawnIntervalTicks   |       1 |     900 |      24 |
+| gravity              |       0 |       5 |       0 |
+| heroDamageMultiplier |     0.1 |      10 |       1 |
+| maxHeroes            |       1 |     300 |      60 |
+| heroIdleTicks        |      30 |  324000 |   27000 |
+
+Gravity accelerates projectile vertical velocity by `gravity * 0.01` per tick. Enemy speed multiplier applies when each wave enemy spawns. Shared rule writes are ordered; coordinate temporary buffs with saved state and generation tokens.
+
+## Visual effects
+
+All text is rendered through Canvas `fillText`. Effects are render events, never executable HTML.
+
+- `fx.banner(text)` ≤120 characters.
+- `fx.telegraph(x,y,radius,ticks)`: radius 1–150, duration 1–300; pulsing/filling meteor target and incoming fireball.
+- `fx.impact(x,y)`: flash and fading crater, 90 ticks.
+- `fx.shake(intensity,ticks)`: intensity 0–20, duration 0–300.
+- `fx.particles(x,y,'#rrggbb',count)`: count 0–100 (renderer samples up to 40).
+- `fx.tint('#rrggbb',ticks)` and `fx.weather(kind,ticks)`: duration 0–1800; weather `rain|snow|ash|meteor|aurora`.
+
+## Enforced budgets
+
+4 MiB memory and 256 KiB stack per mod; 50 ms registration; aggregate 20 ms thread CPU execution per mod per simulation tick (60 ms on shared CI runners). Deadlines also bound infinite loops. 16 loaded mods; 32 definitions per mod; 100 owned living entities (including weapon projectiles); 1000 total world entities; 128 buffered writes and 256 host operations per invocation. Catching a buffer/operation quota exception cannot rescue the transaction.
+
+Per mod: 32 repeating timers, 32 named schedule declarations, 32 pending schedules, 16 commands, 32 listeners per event. Delays/intervals are integer 1–108000 ticks; schedule payload ≤4 KiB UTF-8. Definition/source maximum 100000 characters (file loader additionally caps bytes). The JSON bridge caps each request/response at 65536 characters. Tags cap at 16 per entity. Numeric values must be finite; invalid shapes throw, valid numbers are clamped to the documented bounds.
+
+## Complete examples
+
+Welcome:
 
 ```js
 export function register(api) {
   api.on("hero_join", (e) => api.fx.banner(`Welcome ${e.viewer}`));
 }
 ```
+
+Command with persisted cooldown:
 
 ```js
 export function register(api) {
@@ -28,20 +86,31 @@ export function register(api) {
 }
 ```
 
-```js
-export function register(api) {
-  api.every(90, () => api.fx.particles(600, 440, "#ff9933", 12));
-}
-```
+Repeating timer with persistent count:
 
 ```js
 export function register(api) {
-  api.on("twitch:raid", () => {
-    api.fx.weather("aurora", 600);
-    api.fx.shake(3, 20);
+  api.every(90, () => {
+    api.state.count = (api.state.count || 0) + 1;
+    api.fx.particles(600, 440, "#ff9933", 12);
   });
 }
 ```
+
+Named delayed work (replaces closure-based `after`):
+
+```js
+export function register(api) {
+  api.onSchedule("burst", ({ x, y }) => api.fx.impact(x, y));
+  api.on("twitch:sub", () => {
+    const x = 400 + api.random() * 400;
+    api.fx.telegraph(x, 440, 40, 30);
+    api.schedule("burst", 30, { x, y: 440 });
+  });
+}
+```
+
+Custom creature:
 
 ```js
 export function register(api) {
@@ -56,14 +125,42 @@ export function register(api) {
 }
 ```
 
+Hero weapon and custom projectile:
+
 ```js
 export function register(api) {
-  api.on("twitch:sub", () => {
-    api.fx.telegraph(600, 440, 40, 30);
-    api.after(30, () => {
-      for (const enemy of api.query({ team: "enemy" }).slice(0, 20))
-        enemy.damage(10);
-    });
+  api.defineProjectile("spark-bolt", {
+    sprite: { grid: [".a.", "aaa", ".a."], palette: { a: "#ffcf68" } },
+    speed: 7,
+    damage: 12,
+    lifetime: 90,
+  });
+  api.defineHeroWeapon("spark-staff", {
+    damage: 12,
+    range: 180,
+    cooldown: 30,
+    projectile: "spark-bolt",
+  });
+  api.on("twitch:raid", () => {
+    for (const hero of api.query({ team: "hero", limit: 16 }))
+      hero.equip("spark-staff");
   });
 }
 ```
+
+Bounded healing and weather:
+
+```js
+export function register(api) {
+  api.on("twitch:follow", () => {
+    for (const hero of api.query({ team: "hero", limit: 16 })) hero.heal(10);
+    api.fx.weather("snow", 90);
+  });
+}
+```
+
+See `apps/server/examples/` for tested meteor impacts, third-wave splitting Slime King, and Aurora's 20-second all-hero damage buff. Aurora also grants a persistent staff to the first 16 heroes present; the global buff expires, the granted weapon remains. Keep bursts bounded; do not iterate all 300 heroes with a host mutation for each in one callback.
+
+CPU accounting uses Node 24's [process.threadCpuUsage](https://nodejs.org/docs/latest-v24.x/api/process.html#processthreadcpuusagepreviousvalue), excluding OS descheduling. A secondary wall deadline (at least 250 ms) also bounds each evaluation. Windows CPU timer granularity can overshoot a CPU limit by one OS accounting quantum. Performance gates independently measure real elapsed tick time.
+
+Deployment rollback retains the latest 32 in-memory deployment checkpoints. If no matching history exists (for example, a fresh host restored only from a persistence snapshot), failure restores the host's initial safe baseline, disabling the unknown set. Persisting deployment history across process restarts belongs to M3; JSON world/timer continuation is already supported. Explicit last-good rollback uses the latest periodic checkpoint.

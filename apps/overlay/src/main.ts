@@ -1,4 +1,6 @@
 import "./style.css";
+import { renderSnapshotSchema } from "../../../packages/shared/src/protocol.js";
+import { appearance, placeLabels, type Label } from "./presentation.js";
 
 type Entity = {
   id: number;
@@ -10,6 +12,7 @@ type Entity = {
   maxHp: number;
   viewer?: string;
   level: number;
+  joined: number;
 };
 type Fx = { type: string; [key: string]: string | number | boolean };
 type Sprite = { grid: string[]; palette: Record<string, string> };
@@ -40,7 +43,8 @@ let receivedAt = 0;
 let connected = false;
 let meteorEnabled = true;
 let joinSequence = 0;
-let lastFrame = performance.now();
+let oldEntities = new Map<number, Entity>();
+let sortedEntities: Entity[] = [];
 
 function connect(): void {
   const socket = new WebSocket(`ws://${location.hostname}:3000`);
@@ -53,10 +57,43 @@ function connect(): void {
   };
   socket.onmessage = (event) => {
     try {
-      const data = JSON.parse(String(event.data)) as Message;
-      if (!data.world || !Array.isArray(data.world.entities)) return;
+      const parsed = renderSnapshotSchema.safeParse(
+        JSON.parse(String(event.data)),
+      );
+      if (!parsed.success) return;
+      const wire = parsed.data;
+      const data: Message = {
+        world: {
+          tick: wire.tick,
+          wave: wire.wave,
+          cycle: wire.cycle,
+          keepHp: wire.keepHp,
+          entities: wire.entities.map(
+            ([id, kind, team, x, y, hp, maxHp, viewer, level, joined]) => ({
+              id,
+              kind,
+              team,
+              x,
+              y,
+              hp,
+              maxHp,
+              viewer,
+              level,
+              joined,
+            }),
+          ),
+        },
+        fx: wire.fx as Fx[],
+        sprites: wire.sprites,
+      };
       previous = current;
       current = data;
+      oldEntities = new Map(
+        previous?.world.entities.map((e) => [e.id, e]) ?? [],
+      );
+      sortedEntities = [...data.world.entities].sort((a, b) => a.y - b.y);
+      canvas!.dataset.entities = String(sortedEntities.length);
+      canvas!.dataset.tick = String(wire.tick);
       receivedAt = performance.now();
       for (const fx of data.fx ?? []) {
         const duration =
@@ -100,8 +137,13 @@ window.addEventListener("keydown", (event) => {
     void action(meteorEnabled ? "load" : "unload", { modId: "meteor-shower" });
   }
 });
-function pixelSprite(kind: string, custom?: Sprite): HTMLCanvasElement {
-  const key = kind + JSON.stringify(custom ?? null);
+function pixelSprite(
+  kind: string,
+  custom?: Sprite,
+  viewer = "",
+): HTMLCanvasElement {
+  const look = appearance(viewer);
+  const key = kind + (custom ? JSON.stringify(custom) : String(look.variant));
   const cached = atlas.get(key);
   if (cached) return cached;
   const sprite = document.createElement("canvas");
@@ -142,6 +184,24 @@ function pixelSprite(kind: string, custom?: Sprite): HTMLCanvasElement {
           ],
           palette: { g: "#9bce75", w: "#f5f2da", k: "#293a30" },
         };
+  if (kind === "hero") {
+    builtIn.palette.b = look.coat;
+    builtIn.palette.h = look.hair;
+    builtIn.palette.s = look.skin;
+    builtIn.palette.y = look.trim;
+    if (look.hat === 1) {
+      builtIn.grid[0] = "..hhhhhh..";
+      builtIn.grid[1] = ".hhhhhhhh.";
+    }
+    if (look.hat === 2) {
+      builtIn.grid[0] = "....hh....";
+      builtIn.grid[1] = "...hhhh...";
+    }
+    if (look.hat === 3) {
+      builtIn.grid[0] = "..h....h..";
+      builtIn.grid[1] = "..hhhhhh..";
+    }
+  }
   const spec = custom ?? builtIn;
   sprite.width = spec.grid[0]?.length ?? 1;
   sprite.height = spec.grid.length;
@@ -155,6 +215,7 @@ function pixelSprite(kind: string, custom?: Sprite): HTMLCanvasElement {
           g.fillRect(x, y, 1, 1);
         }
       }
+  if (atlas.size > 512) atlas.clear();
   atlas.set(key, sprite);
   return sprite;
 }
@@ -196,7 +257,7 @@ function background(time: number): void {
     ctx.fillRect(x, y, 12 + (i % 13), 3);
   }
 }
-function keep(): void {
+function keep(time: number): void {
   ctx.fillStyle = "#172329";
   ctx.beginPath();
   ctx.ellipse(600, 438, 144, 28, 0, 0, Math.PI * 2);
@@ -227,11 +288,18 @@ function keep(): void {
   ctx.fillRect(595, 190, 40, 22);
   ctx.fillStyle = "#ffd27d";
   ctx.fillRect(602, 197, 21, 5);
+  for (const x of [502, 698]) {
+    const radius = 48 + Math.sin(time / 140 + x) * 4;
+    const glow = ctx.createRadialGradient(x, 303, 2, x, 303, radius);
+    glow.addColorStop(0, "#ffb34a88");
+    glow.addColorStop(1, "#ff7c2000");
+    ctx.fillStyle = glow;
+    ctx.fillRect(x - radius, 303 - radius, radius * 2, radius * 2);
+    ctx.fillStyle = "#ffedb2";
+    ctx.fillRect(x - 3, 295 + Math.sin(time / 80) * 2, 6, 13);
+  }
 }
 function render(time: number): void {
-  const dt = Math.min(50, time - lastFrame);
-  lastFrame = time;
-  void dt;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, 1920, 1080);
   if (transparent) {
@@ -253,24 +321,34 @@ function render(time: number): void {
     );
   }
   if (!transparent) background(time);
-  keep();
-  const alpha = Math.min(1, Math.max(0, (time - receivedAt) / (1000 / 30)));
-  const old = new Map(previous?.world.entities.map((e) => [e.id, e]) ?? []);
-  const entities = [...(current?.world.entities ?? [])].sort(
-    (a, b) => a.y - b.y,
-  );
-  for (const entity of entities) {
-    const prev = old.get(entity.id) ?? entity;
+  keep(time);
+  const alpha = Math.min(1, Math.max(0, (time - receivedAt) / 50));
+  const labels: Label[] = [];
+  const credit = effects
+    .filter((fx) => fx.type === "banner" && time - fx.start < fx.duration)
+    .map((fx) => String(fx.text))
+    .join(" ");
+  for (const entity of sortedEntities) {
+    const prev = oldEntities.get(entity.id) ?? entity;
     const x = prev.x + (entity.x - prev.x) * alpha,
       y = prev.y + (entity.y - prev.y) * alpha;
     if (entity.team === "projectile") {
-      ctx.fillStyle = "#ffe396";
-      ctx.fillRect(x - 4, y - 4, 8, 8);
+      const custom = current?.sprites[entity.kind];
+      if (custom)
+        ctx.drawImage(pixelSprite(entity.kind, custom), x - 7, y - 7, 14, 14);
+      else {
+        ctx.fillStyle = "#ffe396";
+        ctx.fillRect(x - 4, y - 4, 8, 8);
+      }
       continue;
     }
-    const sprite = pixelSprite(entity.kind, current?.sprites[entity.kind]);
+    const sprite = pixelSprite(
+      entity.kind,
+      current?.sprites[entity.kind],
+      entity.viewer,
+    );
     const size =
-      entity.kind === "slime-king" ? 62 : entity.team === "hero" ? 30 : 28;
+      entity.kind === "slime-king" ? 80 : entity.team === "hero" ? 42 : 38;
     ctx.fillStyle = "#14202588";
     ctx.beginPath();
     ctx.ellipse(x, y + 8, size * 0.45, 7, 0, 0, Math.PI * 2);
@@ -278,11 +356,18 @@ function render(time: number): void {
     ctx.drawImage(sprite, x - size / 2, y - size, size, size);
     if (entity.viewer) {
       ctx.font = "bold 12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#101b23";
-      ctx.fillText(entity.viewer, x + 1, y - size - 5);
-      ctx.fillStyle = "#f9e8c6";
-      ctx.fillText(entity.viewer, x, y - size - 6);
+      labels.push({
+        text: entity.viewer,
+        x,
+        y: y - size - 10,
+        width: ctx.measureText(entity.viewer).width + 10,
+        height: 18,
+        priority:
+          (credit.includes(entity.viewer) ? 1e9 : 0) +
+          (current!.world.tick - entity.joined < 150 ? 1e6 + entity.id : 0) +
+          entity.level * 1000 +
+          entity.id,
+      });
     }
     if (entity.hp < entity.maxHp) {
       ctx.fillStyle = "#1c2428";
@@ -296,6 +381,27 @@ function render(time: number): void {
       );
     }
   }
+  const damageRects = effects
+    .filter((fx) => fx.type === "damage" && time - fx.start < fx.duration)
+    .map((fx) => ({
+      x: Number(fx.x),
+      y: Number(fx.y) - 30 - ((time - fx.start) / fx.duration) * 35,
+      width: 65,
+      height: 28,
+    }));
+  for (const label of placeLabels(labels, damageRects)) {
+    ctx.fillStyle = "#101b23dc";
+    ctx.fillRect(
+      label.x - label.width / 2,
+      label.y - label.height / 2,
+      label.width,
+      label.height,
+    );
+    ctx.textAlign = "center";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = "#f9e8c6";
+    ctx.fillText(label.text, label.x, label.y + 4);
+  }
   for (let i = effects.length - 1; i >= 0; i--) {
     const fx = effects[i];
     if (!fx) continue;
@@ -307,18 +413,79 @@ function render(time: number): void {
     const x = Number(fx.x ?? 600),
       y = Number(fx.y ?? 337);
     if (fx.type === "telegraph") {
+      const radius = Number(fx.radius ?? 50);
+      ctx.fillStyle = `rgba(255,103,35,${0.08 + progress * 0.16})`;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(
+        x,
+        y,
+        radius,
+        -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * progress,
+      );
+      ctx.closePath();
+      ctx.fill();
       ctx.strokeStyle = `rgba(255,143,69,${0.5 + Math.sin(time / 100) * 0.3})`;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(x, y, Number(fx.radius ?? 50), 0, Math.PI * 2);
       ctx.stroke();
+      const mx = x + (1 - progress) * 180,
+        my = y - (1 - progress) * 340;
+      const trail = ctx.createLinearGradient(mx, my, mx + 90, my - 170);
+      trail.addColorStop(0, "#ffefb9");
+      trail.addColorStop(0.25, "#ff9e36dd");
+      trail.addColorStop(1, "#ff5b1500");
+      ctx.fillStyle = trail;
+      ctx.beginPath();
+      ctx.moveTo(mx - 12, my + 3);
+      ctx.lineTo(mx + 90, my - 170);
+      ctx.lineTo(mx + 12, my - 3);
+      ctx.closePath();
+      ctx.fill();
+      const glow = ctx.createRadialGradient(mx, my, 1, mx, my, 28);
+      glow.addColorStop(0, "#fff8d6");
+      glow.addColorStop(0.25, "#ffb54d");
+      glow.addColorStop(1, "#ff5a1400");
+      ctx.fillStyle = glow;
+      ctx.fillRect(mx - 28, my - 28, 56, 56);
+      ctx.fillStyle = "#fff3c9";
+      ctx.beginPath();
+      ctx.arc(mx, my, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffb34b";
+      for (let n = 0; n < 14; n++) {
+        const t = (time / 180 + n * 0.13) % 1;
+        ctx.fillRect(
+          mx + t * 70 + Math.sin(n * 8) * 8,
+          my - t * 140,
+          3 * (1 - t),
+          3 * (1 - t),
+        );
+      }
     }
-    if (fx.type === "damage") {
+    if (fx.type === "impact") {
+      ctx.fillStyle = `rgba(19,18,22,${0.6 * (1 - progress)})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 42, 16, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255,126,38,${1 - progress})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      if (progress < 0.18) {
+        ctx.fillStyle = `rgba(255,239,189,${(1 - progress / 0.18) * 0.7})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 20 + progress * 300, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (fx.type === "damage" || fx.type === "loot") {
       ctx.font = "bold 20px monospace";
       ctx.textAlign = "center";
       ctx.fillStyle = "#ffd58b";
       ctx.fillText(
-        String(Math.round(Number(fx.amount))),
+        (fx.type === "loot" ? "+" : "") + String(Math.round(Number(fx.amount))),
         x,
         y - 20 - progress * 35,
       );
@@ -383,6 +550,21 @@ function render(time: number): void {
       ctx.fillStyle = "#ffca7c";
       ctx.fillText(String(fx.text ?? ""), 600, 134, 510);
     }
+  }
+  ctx.fillStyle = "#ffb667";
+  for (let n = 0; n < 32; n++) {
+    const x = (n * 197 + Math.sin(time / 1500 + n) * 25) % 1200,
+      y = 675 - ((time * 0.025 + n * 37) % 380);
+    ctx.globalAlpha = 0.2 + 0.4 * Math.sin(n + time / 700) ** 2;
+    ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+  if (!transparent) {
+    const vignette = ctx.createRadialGradient(600, 360, 220, 600, 360, 730);
+    vignette.addColorStop(0, "#050e1800");
+    vignette.addColorStop(1, "#050e1888");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, 1200, 675);
   }
   ctx.restore();
   ctx.textAlign = "left";

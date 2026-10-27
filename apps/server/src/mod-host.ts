@@ -4,32 +4,49 @@ import {
   type Entity,
   type RuleKey,
   type SpawnOptions,
+  type WorldState,
+  type ModRecord,
 } from "../../../packages/engine/src/index.js";
 import {
   validateSprite,
   type EntityDefinition,
+  type PixelSprite,
 } from "../../../packages/mod-api/src/index.js";
-import { ModRuntime } from "../../../packages/sandbox/src/index.js";
+import {
+  ModRuntime,
+  ModExecutionError,
+  threadCpuMs,
+} from "../../../packages/sandbox/src/index.js";
 
 type Definition = { owner: string; spec: EntityDefinition };
-type ModEntry = {
-  runtime: ModRuntime;
-  source: string;
-  previous?: ModEntry;
-  previousDefinitions?: Map<string, Definition>;
+type Transaction = {
+  id: string;
+  declaring: boolean;
+  commands: (() => void)[];
+  operations: number;
+  failed: boolean;
+  rng: number;
+  nextId: number;
+  spawned: Map<number, Entity>;
+  schedules: number;
 };
 const identifier = /^[a-z][a-z0-9_-]{0,39}$/;
 const finite = (value: unknown, min: number, max: number): number => {
   if (typeof value !== "number" || !Number.isFinite(value))
-    throw new Error("Expected a finite number");
+    throw Error("Expected a finite number");
   return Math.max(min, Math.min(max, value));
 };
-const shortString = (value: unknown, max: number): string => {
+const text = (value: unknown, max: number): string => {
   if (typeof value !== "string" || value.length > max)
-    throw new Error("Invalid text");
+    throw Error("Invalid text");
   return value;
 };
-const entityView = ({ id, kind, team, x, y, hp, maxHp, tags }: Entity) => ({
+const named = (value: unknown): string => {
+  const name = text(value, 40);
+  if (!identifier.test(name)) throw Error("Invalid name");
+  return name;
+};
+const view = ({ id, kind, team, x, y, hp, maxHp, tags }: Entity) => ({
   id,
   kind,
   team,
@@ -39,355 +56,540 @@ const entityView = ({ id, kind, team, x, y, hp, maxHp, tags }: Entity) => ({
   maxHp,
   tags: [...tags],
 });
+const object = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw Error("Expected object");
+  return value as Record<string, unknown>;
+};
+export interface ModDiagnostic {
+  modId: string;
+  message: string;
+  stack?: string;
+  rollbackVersion: number;
+}
 
-/** Validates every request, including calls that bypass the in-sandbox convenience API. */
+/** A transaction contains validated host commands, never a copy of the world. */
 export class ModHost {
-  private mods = new Map<string, ModEntry>();
+  private mods = new Map<string, ModRuntime>();
   private definitions = new Map<string, Definition>();
-  private owners = new Map<number, string>();
-  private operations = new Map<string, number>();
-  private budgetExceeded = new Set<string>();
-  constructor(readonly world: World) {}
-
-  sprites(): Record<string, EntityDefinition["sprite"]> {
-    return Object.fromEntries(
-      [...this.definitions].map(([name, definition]) => [
-        name,
-        definition.spec.sprite,
-      ]),
-    );
+  private spritesByName: Record<string, PixelSprite> = {};
+  private definitionOwners = new Map<string, string>();
+  private tx?: Transaction;
+  private cpu = new Map<string, number>();
+  private deployments: { id: string; source: string; before: WorldState }[] =
+    [];
+  private readonly safeBaseline: WorldState;
+  private lastGood?: WorldState;
+  readonly diagnostics: ModDiagnostic[] = [];
+  private notices: ModDiagnostic[] = [];
+  private epoch = 0;
+  constructor(readonly world: World) {
+    this.safeBaseline = world.snapshot();
   }
-
-  private operation(id: string, op: string, args: unknown[]): unknown {
-    const count = (this.operations.get(id) ?? 0) + 1;
-    this.operations.set(id, count);
-    if (count > 256) {
-      this.budgetExceeded.add(id);
-      throw new Error("Host operation budget exceeded");
+  sprites(): Record<string, PixelSprite> {
+    return this.spritesByName;
+  }
+  checkpoint(): WorldState {
+    return this.world.snapshot();
+  }
+  persistenceCheckpoint(): WorldState | undefined {
+    return this.lastGood;
+  }
+  drainDiagnostics(): ModDiagnostic[] {
+    return this.notices.splice(0);
+  }
+  rollbackToLastGood(): void {
+    if (!this.lastGood) throw Error("No good checkpoint available");
+    this.restore(this.lastGood);
+  }
+  private begin(id: string, declaring = false): void {
+    this.tx = {
+      id,
+      declaring,
+      commands: [],
+      operations: 0,
+      failed: false,
+      rng: this.world.state.rng,
+      nextId: this.world.state.nextId,
+      spawned: new Map(),
+      schedules: 0,
+    };
+  }
+  private append(command: () => void): void {
+    const tx = this.tx!;
+    if (tx.commands.length >= 128) {
+      tx.failed = true;
+      throw Error("Command buffer budget exceeded (128)");
     }
-    switch (op) {
-      case "random":
-        return this.world.random();
-      case "log":
-        return this.world.state.events.push({
-          type: "mod_log",
-          modId: id,
-          message: shortString(args[0], 200),
-        });
-      case "rules.get":
-      case "rules.set": {
-        const key = shortString(args[0], 40);
-        if (!Object.hasOwn(RULE_BOUNDS, key)) throw new Error("Unknown rule");
-        return op === "rules.get"
-          ? this.world.state.rules[key as RuleKey]
-          : this.world.setRule(key as RuleKey, finite(args[1], -1e6, 1e6));
-      }
-      case "defineEnemy": {
-        const name = shortString(args[0], 40);
-        if (!identifier.test(name)) throw new Error("Invalid definition name");
-        const spec = args[1];
-        if (!spec || typeof spec !== "object" || Array.isArray(spec))
-          throw new Error("Invalid enemy definition");
-        const value = spec as Record<string, unknown>;
-        if (!validateSprite(value.sprite)) throw new Error("Invalid sprite");
+    tx.commands.push(command);
+  }
+  private commit(): void {
+    const tx = this.tx!;
+    if (tx.failed)
+      throw Error("Command buffer or host operation budget exceeded");
+    for (const apply of tx.commands) apply();
+    this.world.state.rng = tx.rng;
+    this.tx = undefined;
+  }
+  private operation = (id: string, op: string, args: unknown[]): unknown => {
+    const tx = this.tx;
+    if (!tx || tx.id !== id) throw Error("No active mod call");
+    if (++tx.operations > 256) {
+      tx.failed = true;
+      throw Error("Host operation budget exceeded (256)");
+    }
+    if (tx.declaring !== op.startsWith("define"))
+      throw Error(
+        tx.declaring
+          ? "Only declarations allowed during register"
+          : "Definitions only allowed during register",
+      );
+    if (op.startsWith("define")) {
+      const name = named(args[0]),
+        spec = object(args[1]);
+      const owner = this.definitionOwners.get(name);
+      if (owner && owner !== id) throw Error("Definition name already in use");
+      if (
+        !owner &&
+        [...this.definitionOwners.values()].filter((v) => v === id).length >= 32
+      )
+        throw Error("Definition budget exceeded");
+      if (op === "defineEnemy") {
+        if (!validateSprite(spec.sprite)) throw Error("Invalid sprite");
         if (
           !["wander", "chase", "orbit", "ranged", "guard"].includes(
-            String(value.behavior),
+            String(spec.behavior),
           )
         )
-          throw new Error("Invalid behavior");
+          throw Error("Invalid behavior");
         const safe: EntityDefinition = {
-          sprite: value.sprite,
-          hp: finite(value.hp, 1, 5000),
-          speed: finite(value.speed, 0, 10),
-          damage: finite(value.damage, 0, 500),
-          behavior: value.behavior as EntityDefinition["behavior"],
-          ...(value.range === undefined
-            ? {}
-            : { range: finite(value.range, 1, 500) }),
+          sprite: spec.sprite,
+          hp: finite(spec.hp, 1, 5000),
+          speed: finite(spec.speed, 0, 10),
+          damage: finite(spec.damage, 0, 500),
+          range: finite(spec.range ?? 20, 1, 500),
+          behavior: spec.behavior as EntityDefinition["behavior"],
         };
-        const existing = this.definitions.get(name);
-        if (existing && existing.owner !== id)
-          throw new Error("Definition name already in use");
-        if (
-          !existing &&
-          [...this.definitions.values()].filter((item) => item.owner === id)
-            .length >= 32
-        )
-          throw new Error("Definition budget exceeded");
         this.definitions.set(name, { owner: id, spec: safe });
-        return null;
-      }
-      case "spawn": {
-        const name = shortString(args[0], 40);
-        const definition = this.definitions.get(name);
-        if (!definition || definition.owner !== id)
-          throw new Error("Unknown enemy kind");
-        if (
-          [...this.owners.values()].filter((owner) => owner === id).length >=
-          100
-        )
-          throw new Error("Entity budget exceeded");
-        const { hp, speed, damage, behavior, range } = definition.spec;
-        const spawn: SpawnOptions = {
-          kind: name,
-          team: "enemy",
-          x: finite(args[1], -200, 1400),
-          y: finite(args[2], -200, 875),
-          hp,
-          speed,
-          damage,
-          behavior,
-          ...(range === undefined ? {} : { range }),
+        this.spritesByName[name] = safe.sprite;
+      } else if (op === "defineProjectile") {
+        if (!validateSprite(spec.sprite)) throw Error("Invalid sprite");
+        this.world.state.projectiles[name] = {
+          speed: finite(spec.speed, 1, 20),
+          damage: finite(spec.damage, 0, 500),
+          lifetime: Math.floor(finite(spec.lifetime, 1, 300)),
         };
-        const entity = this.world.spawn(spawn);
-        this.owners.set(entity.id, id);
-        return entityView(entity);
-      }
-      case "query": {
-        const filter = args[0];
-        if (!filter || typeof filter !== "object" || Array.isArray(filter))
-          throw new Error("Invalid query");
-        const q = filter as Record<string, unknown>;
+        this.spritesByName[name] = spec.sprite;
+      } else if (op === "defineHeroWeapon") {
+        const projectile =
+          spec.projectile === undefined ? undefined : named(spec.projectile);
         if (
-          Object.keys(q).some((key) => !["team", "kind", "tag"].includes(key))
+          projectile &&
+          (!this.world.state.projectiles[projectile] ||
+            this.definitionOwners.get(projectile) !== id)
         )
-          throw new Error("Invalid query field");
-        for (const value of Object.values(q)) shortString(value, 40);
-        return this.world.state.entities
-          .filter(
-            (e) =>
-              (!q.team || e.team === q.team) &&
-              (!q.kind || e.kind === q.kind) &&
-              (!q.tag || e.tags.includes(String(q.tag))),
-          )
-          .slice(0, 300)
-          .map(entityView);
+          throw Error("Declare your projectile before its weapon");
+        this.world.state.weapons[name] = {
+          modOwner: id,
+          damage: finite(spec.damage, 0, 500),
+          range: finite(spec.range, 1, 500),
+          cooldown: Math.floor(finite(spec.cooldown, 1, 300)),
+          ...(projectile ? { projectile } : {}),
+        };
+      } else throw Error("Unknown definition");
+      this.definitionOwners.set(name, id);
+      return null;
+    }
+    if (op === "random") {
+      let x = tx.rng;
+      x ^= x << 13;
+      x ^= x >>> 17;
+      x ^= x << 5;
+      tx.rng = x >>> 0;
+      return tx.rng / 0x100000000;
+    }
+    if (op === "rules.get" || op === "rules.set") {
+      const key = text(args[0], 40) as RuleKey;
+      if (!Object.hasOwn(RULE_BOUNDS, key)) throw Error("Unknown rule");
+      if (op === "rules.get") return this.world.state.rules[key];
+      const bounds = RULE_BOUNDS[key],
+        value = finite(args[1], bounds.min, bounds.max);
+      this.append(() => {
+        this.world.state.rules[key] = value;
+      });
+      return value;
+    }
+    if (op === "schedule") {
+      const name = named(args[0]),
+        delay = finite(args[1], 1, 108000);
+      if (
+        !Number.isInteger(delay) ||
+        !this.mods.get(id)?.declarations.schedules.includes(name)
+      )
+        throw Error("Unknown schedule or invalid delay");
+      const record = this.world.state.mods[id]!;
+      if (record.schedules.length + ++tx.schedules > 32) {
+        tx.failed = true;
+        throw Error("Schedule budget exceeded (32)");
       }
-      case "entity.damage":
-      case "entity.heal":
-      case "entity.setSpeed":
-      case "entity.tag": {
-        const entity = this.world.state.entities.find(
-          (item) => item.id === args[0],
+      const payload = args[2] ?? null;
+      if (Buffer.byteLength(JSON.stringify(payload), "utf8") > 4096)
+        throw Error("Schedule payload exceeds 4096 bytes");
+      const item = { name, dueTick: this.world.state.tick + delay, payload };
+      this.append(() => record.schedules.push(item));
+      return null;
+    }
+    if (op === "spawn") {
+      const name = named(args[0]),
+        definition = this.definitions.get(name);
+      if (!definition || definition.owner !== id)
+        throw Error("Unknown enemy kind");
+      let count = tx.spawned.size;
+      for (const entity of this.world.state.entities)
+        if (entity.tags.includes(`mod:${id}`)) count++;
+      if (
+        count >= 100 ||
+        this.world.state.entities.length + tx.spawned.size >= 1000
+      )
+        throw Error("Entity budget exceeded");
+      const options: SpawnOptions = {
+        kind: name,
+        team: "enemy",
+        x: finite(args[1], -200, 1400),
+        y: finite(args[2], -200, 875),
+        ...definition.spec,
+      };
+      const entity = {
+        id: tx.nextId++,
+        kind: name,
+        team: "enemy",
+        x: options.x,
+        y: options.y,
+        hp: options.hp!,
+        maxHp: options.hp!,
+        tags: [`mod:${id}`],
+      } as Entity;
+      tx.spawned.set(entity.id, entity);
+      this.append(() => {
+        const spawned = this.world.spawn(options);
+        spawned.tags.push(`mod:${id}`);
+      });
+      return view(entity);
+    }
+    if (op === "query") {
+      const q = object(args[0]);
+      if (
+        Object.keys(q).some(
+          (key) => !["team", "kind", "tag", "limit"].includes(key),
+        )
+      )
+        throw Error("Invalid query field");
+      for (const [key, value] of Object.entries(q))
+        if (key !== "limit") text(value, 40);
+      const limit = Math.floor(finite(q.limit ?? 300, 1, 300));
+      const result = [];
+      for (const e of this.world.state.entities) {
+        if (
+          e.hp > 0 &&
+          (!q.team || e.team === q.team) &&
+          (!q.kind || e.kind === q.kind) &&
+          (!q.tag || e.tags.includes(String(q.tag)))
+        )
+          result.push(view(e));
+        if (result.length === limit) break;
+      }
+      return result;
+    }
+    if (op.startsWith("entity.")) {
+      const entityId = finite(args[0], 1, Number.MAX_SAFE_INTEGER),
+        entity = this.world.byId.get(entityId) ?? tx.spawned.get(entityId);
+      if (!entity) throw Error("Unknown entity");
+      if (op === "entity.equip") {
+        const name = named(args[1]);
+        if (
+          entity.team !== "hero" ||
+          !this.world.state.weapons[name] ||
+          this.definitionOwners.get(name) !== id
+        )
+          throw Error("Unknown hero weapon");
+        this.append(() => {
+          this.world.byId.get(entityId)!.weapon = name;
+        });
+      } else if (op === "entity.tag") {
+        const tag = named(args[1]);
+        this.append(() => {
+          const e = this.world.byId.get(entityId)!;
+          if (!e.tags.includes(tag) && e.tags.length < 16) e.tags.push(tag);
+        });
+      } else {
+        const amount = finite(args[1], 0, op === "entity.setSpeed" ? 10 : 500);
+        if (!["entity.damage", "entity.heal", "entity.setSpeed"].includes(op))
+          throw Error("Unknown entity operation");
+        this.append(() => {
+          const e = this.world.byId.get(entityId)!;
+          if (op === "entity.damage") this.world.damage(e, amount);
+          if (op === "entity.heal") e.hp = Math.min(e.maxHp, e.hp + amount);
+          if (op === "entity.setSpeed") e.speed = amount;
+        });
+      }
+      return null;
+    }
+    const fx: { type: string; [key: string]: string | number | boolean } = {
+      type: op.slice(3),
+      modId: id,
+    };
+    const color = (value: unknown) => {
+      const c = text(value, 7);
+      if (!/^#[0-9a-fA-F]{6}$/.test(c)) throw Error("Invalid color");
+      return c;
+    };
+    switch (op) {
+      case "log": {
+        const message = text(args[0], 200);
+        this.append(() =>
+          this.world.state.events.push({ type: "mod_log", modId: id, message }),
         );
-        if (!entity) throw new Error("Unknown entity");
-        if (op === "entity.damage")
-          this.world.damage(entity, finite(args[1], 0, 500));
-        if (op === "entity.heal")
-          entity.hp = Math.min(
-            entity.maxHp,
-            entity.hp + finite(args[1], 0, 500),
-          );
-        if (op === "entity.setSpeed") entity.speed = finite(args[1], 0, 10);
-        if (op === "entity.tag") {
-          const tag = shortString(args[1], 40);
-          if (!identifier.test(tag)) throw new Error("Invalid tag");
-          if (!entity.tags.includes(tag) && entity.tags.length < 16)
-            entity.tags.push(tag);
-        }
         return null;
       }
       case "fx.banner":
-        this.world.state.fx.push({
-          type: "banner",
-          text: shortString(args[0], 120),
-          modId: id,
-        });
-        return null;
+        fx.text = text(args[0], 120);
+        break;
       case "fx.telegraph":
-        this.world.state.fx.push({
-          type: "telegraph",
-          x: finite(args[0], -200, 1400),
-          y: finite(args[1], -200, 875),
-          radius: finite(args[2], 1, 150),
-          ticks: finite(args[3], 1, 300),
-          modId: id,
-        });
-        return null;
+        fx.x = finite(args[0], -200, 1400);
+        fx.y = finite(args[1], -200, 875);
+        fx.radius = finite(args[2], 1, 150);
+        fx.ticks = finite(args[3], 1, 300);
+        break;
+      case "fx.impact":
+        fx.x = finite(args[0], -200, 1400);
+        fx.y = finite(args[1], -200, 875);
+        fx.ticks = 90;
+        break;
       case "fx.shake":
-        this.world.state.fx.push({
-          type: "shake",
-          intensity: finite(args[0], 0, 20),
-          ticks: finite(args[1], 0, 300),
-          modId: id,
-        });
-        return null;
-      case "fx.particles": {
-        const color = shortString(args[2], 7);
-        if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error("Invalid color");
-        this.world.state.fx.push({
-          type: "particles",
-          x: finite(args[0], -200, 1400),
-          y: finite(args[1], -200, 875),
-          color,
-          count: finite(args[3], 0, 100),
-          modId: id,
-        });
-        return null;
-      }
-      case "fx.tint": {
-        const color = shortString(args[0], 7);
-        if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error("Invalid color");
-        this.world.state.fx.push({
-          type: "tint",
-          color,
-          ticks: finite(args[1], 0, 1800),
-          modId: id,
-        });
-        return null;
-      }
-      case "fx.weather": {
-        const weather = shortString(args[0], 20);
-        if (!["rain", "snow", "ash", "meteor", "aurora"].includes(weather))
-          throw new Error("Invalid weather");
-        this.world.state.fx.push({
-          type: "weather",
-          weather,
-          ticks: finite(args[1], 0, 1800),
-          modId: id,
-        });
-        return null;
-      }
+        fx.intensity = finite(args[0], 0, 20);
+        fx.ticks = finite(args[1], 0, 300);
+        break;
+      case "fx.particles":
+        fx.x = finite(args[0], -200, 1400);
+        fx.y = finite(args[1], -200, 875);
+        fx.color = color(args[2]);
+        fx.count = finite(args[3], 0, 100);
+        break;
+      case "fx.tint":
+        fx.color = color(args[0]);
+        fx.ticks = finite(args[1], 0, 1800);
+        break;
+      case "fx.weather":
+        fx.weather = text(args[0], 20);
+        if (!["rain", "snow", "ash", "meteor", "aurora"].includes(fx.weather))
+          throw Error("Invalid weather");
+        fx.ticks = finite(args[1], 0, 1800);
+        break;
       default:
-        throw new Error(`Unknown host operation: ${op}`);
+        throw Error(`Unknown host operation: ${op}`);
     }
+    this.append(() => this.world.state.fx.push(fx));
+    return null;
+  };
+  private removeDefinitions(id: string): void {
+    for (const [name, owner] of this.definitionOwners)
+      if (owner === id) {
+        this.definitionOwners.delete(name);
+        this.definitions.delete(name);
+        delete this.spritesByName[name];
+        delete this.world.state.weapons[name];
+        delete this.world.state.projectiles[name];
+      }
   }
   async load(id: string, source: string): Promise<void> {
-    if (!identifier.test(id) || source.length > 100000)
-      throw new Error("Invalid mod id or source size");
-    if (!this.mods.has(id) && this.mods.size >= 16)
-      throw new Error("Mod budget exceeded");
-    const snapshot = this.world.snapshot();
-    const definitions = new Map(this.definitions);
-    const owners = new Map(this.owners);
+    if (
+      !identifier.test(id) ||
+      source.length > 100000 ||
+      (!this.mods.has(id) && this.mods.size >= 16)
+    )
+      throw Error("Invalid mod or mod budget exceeded");
+    const before = this.checkpoint();
+    let runtime: ModRuntime | undefined;
     try {
-      this.operations.set(id, 0);
-      this.budgetExceeded.delete(id);
-      for (const [name, definition] of this.definitions)
-        if (definition.owner === id) this.definitions.delete(name);
-      const runtime = await ModRuntime.load(
-        id,
-        source,
-        (modId, op, args) => this.operation(modId, op, args),
-        { budgetMs: 50 },
-      );
-      if (this.budgetExceeded.has(id)) {
-        runtime.dispose();
-        throw new Error("Host operation budget exceeded");
-      }
-      const previous = this.mods.get(id);
-      if (previous?.previous) {
-        previous.previous.runtime.dispose();
-        delete previous.previous;
-      }
-      this.mods.set(id, {
-        runtime,
-        source,
-        ...(previous ? { previous, previousDefinitions: definitions } : {}),
+      this.removeDefinitions(id);
+      this.begin(id, true);
+      runtime = await ModRuntime.load(id, source, this.operation, {
+        budgetMs: 10,
       });
+      this.commit();
+      this.mods.get(id)?.dispose();
+      this.mods.set(id, runtime);
+      const record: ModRecord = {
+        source,
+        declarationTick: this.world.state.tick,
+        state: {},
+        timers: runtime.declarations.intervals.map((interval) => ({
+          interval,
+          next: this.world.state.tick + interval,
+        })),
+        schedules: [],
+        cooldowns: {},
+      };
+      this.world.state.mods[id] = record;
+      this.world.state.modSetVersion++;
+      this.deployments.push({ id, source, before });
+      if (this.deployments.length > 32) this.deployments.shift();
+      this.lastGood = this.checkpoint();
     } catch (error) {
-      this.world.restore(snapshot);
-      this.definitions = definitions;
-      this.owners = owners;
+      runtime?.dispose();
+      this.tx = undefined;
+      this.restore(before);
       throw error;
     }
   }
-  unload(id: string): void {
-    const entry = this.mods.get(id);
-    if (!entry) return;
-    entry.runtime.dispose();
-    entry.previous?.runtime.dispose();
-    this.mods.delete(id);
-    for (const [name, definition] of this.definitions)
-      if (definition.owner === id) this.definitions.delete(name);
-    for (const [entityId, owner] of this.owners)
-      if (owner === id) {
-        this.world.state.entities = this.world.state.entities.filter(
-          (entity) => entity.id !== entityId,
-        );
-        this.owners.delete(entityId);
-      }
-  }
-  private fail(
-    id: string,
-    entry: ModEntry,
-    error: unknown,
-    snapshot: ReturnType<World["snapshot"]>,
-    definitions: Map<string, Definition>,
-    owners: Map<number, string>,
-  ): void {
+  /** Re-register the exact source set, then restore JSON state and host-owned timer phases. */
+  restore(snapshot: WorldState): void {
+    for (const runtime of this.mods.values()) runtime.dispose();
+    this.mods.clear();
+    this.definitions.clear();
+    this.definitionOwners.clear();
+    this.spritesByName = {};
     this.world.restore(snapshot);
-    this.definitions = definitions;
-    this.owners = owners;
-    entry.runtime.dispose();
-    if (entry.previous) {
-      for (const [name, definition] of this.definitions)
-        if (definition.owner === id) this.definitions.delete(name);
-      for (const [name, definition] of entry.previousDefinitions ?? [])
-        if (definition.owner === id) this.definitions.set(name, definition);
-      this.mods.set(id, entry.previous);
-    } else {
-      this.mods.delete(id);
-      for (const [name, definition] of this.definitions)
-        if (definition.owner === id) this.definitions.delete(name);
+    this.cpu.clear();
+    this.epoch++;
+    for (const [id, record] of Object.entries(this.world.state.mods)) {
+      this.begin(id, true);
+      const runtime = ModRuntime.loadSync(id, record.source, this.operation, {
+        budgetMs: 10,
+      });
+      this.commit();
+      runtime.restore(record.state);
+      this.mods.set(id, runtime);
     }
-    this.world.state.fx.push({
-      type: "banner",
-      text: `Mod ${id} disabled`,
+    // Declaration code is pure, and derived definitions must not perturb snapshot order/data.
+    this.world.restore(snapshot);
+  }
+  unload(id: string): void {
+    if (!this.mods.has(id)) return;
+    this.lastGood = this.checkpoint();
+    this.mods.get(id)!.dispose();
+    this.mods.delete(id);
+    delete this.world.state.mods[id];
+    this.removeDefinitions(id);
+    this.world.state.entities = this.world.state.entities.filter(
+      (e) => !e.tags.includes(`mod:${id}`),
+    );
+    this.world.reindex();
+    this.world.state.modSetVersion++;
+  }
+  private fail(id: string, error: unknown): void {
+    this.tx = undefined;
+    const failedSource = this.world.state.mods[id]?.source;
+    let index = this.deployments.length - 1;
+    while (index >= 0) {
+      const deployment = this.deployments[index]!;
+      if (deployment.id === id && deployment.source === failedSource) break;
+      index--;
+    }
+    const target =
+      index >= 0 ? this.deployments[index]!.before : this.safeBaseline;
+    this.restore(target);
+    this.deployments = index >= 0 ? this.deployments.slice(0, index) : [];
+    this.lastGood = target;
+    const details =
+      error instanceof ModExecutionError ? error.details : undefined;
+    this.diagnostics.push({
       modId: id,
+      message: (error instanceof Error ? error.message : String(error)).slice(
+        0,
+        500,
+      ),
+      ...(details?.stack ? { stack: details.stack.slice(0, 2000) } : {}),
+      rollbackVersion: this.world.state.modSetVersion,
     });
-    this.world.state.events.push({
-      type: "mod_error",
-      modId: id,
-      message:
-        error instanceof Error
-          ? error.message.slice(0, 200)
-          : String(error).slice(0, 200),
-    });
+    if (this.diagnostics.length > 32) this.diagnostics.shift();
+    this.notices.push(this.diagnostics.at(-1)!);
+    if (this.notices.length > 32) this.notices.shift();
+  }
+  private call(
+    id: string,
+    kind: "event" | "timer" | "schedule" | "command",
+    name: string | number,
+    payload: unknown,
+  ): boolean {
+    const runtime = this.mods.get(id);
+    if (!runtime) return false;
+    const budget = (process.env.CI ? 60 : 20) - (this.cpu.get(id) ?? 0);
+    const start = threadCpuMs();
+    this.begin(id);
+    try {
+      if (budget <= 0) throw Error("Per-tick CPU budget exceeded");
+      const state = runtime.invoke(kind, name, payload, budget);
+      if (threadCpuMs() - start > budget)
+        throw Error("Per-tick CPU budget exceeded");
+      this.commit();
+      this.world.state.mods[id]!.state = state;
+      this.cpu.set(id, (this.cpu.get(id) ?? 0) + threadCpuMs() - start);
+      return true;
+    } catch (error) {
+      this.fail(id, error);
+      return false;
+    }
   }
   dispatch(event: Record<string, unknown>): void {
-    for (const [id, entry] of this.mods) {
-      const snapshot = this.world.snapshot();
-      const definitions = new Map(this.definitions);
-      const owners = new Map(this.owners);
-      try {
-        this.operations.set(id, 0);
-        this.budgetExceeded.delete(id);
-        entry.runtime.event(event);
-        if (this.budgetExceeded.has(id))
-          throw new Error("Host operation budget exceeded");
-      } catch (error) {
-        this.fail(id, entry, error, snapshot, definitions, owners);
-      }
-    }
-    for (const [entityId] of this.owners)
-      if (!this.world.state.entities.some((entity) => entity.id === entityId))
-        this.owners.delete(entityId);
+    for (const [id, runtime] of this.mods)
+      if (
+        runtime.declarations.events.includes(String(event.type)) &&
+        !this.call(id, "event", String(event.type), event)
+      )
+        break;
   }
   tick(): void {
+    this.cpu.clear();
     this.world.tick();
+    const epoch = this.epoch;
     const events = this.world.drainEvents();
     this.dispatch({ type: "tick", tick: this.world.state.tick });
-    for (const event of events) this.dispatch(event);
+    if (epoch !== this.epoch) return;
+    for (const [id, record] of Object.entries(this.world.state.mods)) {
+      for (let index = 0; index < record.timers.length; index++) {
+        const timer = record.timers[index]!;
+        if (timer.next <= this.world.state.tick) {
+          if (!this.call(id, "timer", index, null)) return;
+          timer.next += timer.interval;
+        }
+      }
+      const due = record.schedules.filter(
+        (item) => item.dueTick <= this.world.state.tick,
+      );
+      for (const item of due) {
+        // Remove only after a successful callback; the pending queue is checkpointed.
+        if (!this.call(id, "schedule", item.name, item.payload)) return;
+        record.schedules.splice(record.schedules.indexOf(item), 1);
+      }
+    }
+    for (const event of events) {
+      this.dispatch(event);
+      if (epoch !== this.epoch) return;
+    }
+    if (this.world.state.tick % 300 === 0) this.lastGood = this.checkpoint();
   }
   command(name: string, viewer: string, args: string): void {
-    for (const [id, entry] of this.mods) {
-      const snapshot = this.world.snapshot();
-      const definitions = new Map(this.definitions);
-      const owners = new Map(this.owners);
-      try {
-        this.operations.set(id, 0);
-        this.budgetExceeded.delete(id);
-        entry.runtime.command(name, viewer.slice(0, 40), args.slice(0, 200));
-        if (this.budgetExceeded.has(id))
-          throw new Error("Host operation budget exceeded");
-      } catch (error) {
-        this.fail(id, entry, error, snapshot, definitions, owners);
-      }
+    for (const [id, runtime] of this.mods) {
+      const cooldown = runtime.declarations.commands[name],
+        record = this.world.state.mods[id]!;
+      if (
+        cooldown === undefined ||
+        this.world.state.tick < (record.cooldowns[name] ?? -1)
+      )
+        continue;
+      if (
+        !this.call(id, "command", name, {
+          viewer: viewer.slice(0, 40),
+          args: args.slice(0, 200),
+        })
+      )
+        break;
+      record.cooldowns[name] = this.world.state.tick + cooldown;
     }
   }
   dispose(): void {
-    for (const id of [...this.mods.keys()]) this.unload(id);
+    for (const runtime of this.mods.values()) runtime.dispose();
+    this.mods.clear();
   }
 }

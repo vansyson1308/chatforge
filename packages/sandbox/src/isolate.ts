@@ -1,5 +1,6 @@
 import {
   getQuickJS,
+  getQuickJSSync,
   type QuickJSContext,
   type QuickJSRuntime,
 } from "quickjs-emscripten";
@@ -8,6 +9,11 @@ export interface SandboxError {
   modId: string;
   message: string;
   stack?: string;
+}
+/** Current simulation thread CPU time, excluding time descheduled by the OS. */
+export function threadCpuMs(): number {
+  const usage = process.threadCpuUsage();
+  return (usage.user + usage.system) / 1000;
 }
 export class ModExecutionError extends Error {
   constructor(public readonly details: SandboxError) {
@@ -19,6 +25,7 @@ export class ModExecutionError extends Error {
 /** Low-level isolated execution primitive. Host bindings and lifecycle are layered above it. */
 export class ModIsolate {
   private deadline = 0;
+  private wallDeadline = 0;
   private constructor(
     readonly id: string,
     private runtime: QuickJSRuntime,
@@ -34,7 +41,18 @@ export class ModIsolate {
       budgetMs?: number;
     } = {},
   ): Promise<ModIsolate> {
-    const quickjs = await getQuickJS();
+    await getQuickJS();
+    return ModIsolate.createSync(id, options);
+  }
+  static createSync(
+    id: string,
+    options: {
+      memoryBytes?: number;
+      stackBytes?: number;
+      budgetMs?: number;
+    } = {},
+  ): ModIsolate {
+    const quickjs = getQuickJSSync();
     const runtime = quickjs.newRuntime();
     runtime.setMemoryLimit(options.memoryBytes ?? 4 * 1024 * 1024);
     runtime.setMaxStackSize(options.stackBytes ?? 256 * 1024);
@@ -45,7 +63,11 @@ export class ModIsolate {
       context,
       options.budgetMs ?? 10,
     );
-    runtime.setInterruptHandler(() => performance.now() >= isolate.deadline);
+    runtime.setInterruptHandler(
+      () =>
+        threadCpuMs() >= isolate.deadline ||
+        performance.now() >= isolate.wallDeadline,
+    );
     try {
       isolate.evaluate(
         `
@@ -91,7 +113,8 @@ export class ModIsolate {
     }
   }
   evaluate(source: string, budgetMs = this.budgetMs, module = false): unknown {
-    this.deadline = performance.now() + budgetMs;
+    this.deadline = threadCpuMs() + budgetMs;
+    this.wallDeadline = performance.now() + Math.max(250, budgetMs * 10);
     const result = this.context.evalCode(
       source,
       `${this.id}.js`,
@@ -112,9 +135,14 @@ export class ModIsolate {
       });
     }
     try {
+      if (this.runtime.hasPendingJob())
+        throw new ModExecutionError({
+          modId: this.id,
+          message: "Async jobs and dynamic import are disabled",
+        });
       return this.context.dump(result.value) as unknown;
     } finally {
-      result.value.dispose();
+      if (result.value.alive) result.value.dispose();
     }
   }
   dispose(): void {

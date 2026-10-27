@@ -22,7 +22,8 @@ it("telegraphs and impacts a subscriber-triggered meteor", async () => {
       hp: 100,
       speed: 0,
     });
-    for (let i = 0; i < 30; i++) host.dispatch({ type: "tick" });
+    for (let i = 0; i < 30; i++) host.tick();
+    expect(host.diagnostics).toEqual([]);
     expect(enemy.hp).toBe(40);
     expect(world.state.fx.some((fx) => fx.type === "particles")).toBe(true);
   } finally {
@@ -64,8 +65,44 @@ it("expires a raid blessing after 600 ticks", async () => {
         (fx) => fx.type === "banner" && String(fx.text).includes("Ada"),
       ),
     ).toBe(true);
-    for (let i = 0; i < 600; i++) host.dispatch({ type: "tick" });
+    for (let i = 0; i < 600; i++) host.tick();
     expect(world.state.rules.heroDamageMultiplier).toBe(1);
+  } finally {
+    host.dispose();
+  }
+});
+
+it("equips the declared weapon and fires its custom projectile with real combat damage", async () => {
+  const world = new World(5),
+    host = new ModHost(world);
+  try {
+    await host.load("aurora-blessing", await source("aurora-blessing"));
+    const hero = world.spawn({
+      kind: "hero",
+      team: "hero",
+      x: 100,
+      y: 200,
+      speed: 0,
+      hp: 1000,
+    });
+    const enemy = world.spawn({
+      kind: "target",
+      team: "enemy",
+      x: 180,
+      y: 200,
+      speed: 0,
+      hp: 1000,
+      damage: 0,
+    });
+    host.dispatch({ type: "twitch:raid", viewer: "Ada" });
+    expect(hero.weapon).toBe("aurora-staff");
+    host.tick();
+    expect(world.state.entities.some((e) => e.kind === "aurora-bolt")).toBe(
+      true,
+    );
+    for (let i = 0; i < 15; i++) host.tick();
+    expect(enemy.hp).toBe(976);
+    expect(host.sprites()["aurora-bolt"]).toBeDefined();
   } finally {
     host.dispose();
   }

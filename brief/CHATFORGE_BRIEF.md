@@ -56,6 +56,14 @@ Pixel-art side/top view: a small keep at the center; each viewer who types `!joi
 - Every viewer-originated string shown on screen is drawn with canvas `fillText` / DOM `textContent` only. **Never innerHTML.** (Reference: Sept 2026 research — "How One Twitch Chat Message Became Code Execution on a Streamer's PC" — an XSS in a vibecoded OBS chat overlay led to native code execution. ChatForge's security story answers this directly.)
 - Mods are versioned; the game state can roll back to the previous mod set instantly.
 
+### 3.2.1 M1 lead QC refinements (approved)
+
+Mod callbacks append validated commands to per-call buffers; only successful callbacks commit their world writes and RNG changes. Full snapshots happen before mod deployments and every 300 ticks, never per callback. The engine uses an ID map and uniform spatial grid, plus hero separation steering. Overlay snapshots are compact render-only arrays at 20 Hz.
+
+`register(api)` is declaration-only (`define*`, `on`, `every`, `registerCommand`, `onSchedule`). Closures are ephemeral. Replace `after(ticks, fn)` with `onSchedule(name, handler)` plus runtime `schedule(name, delayTicks, jsonPayload)`. Full snapshots include mod-set version/sources, declaration tick, JSON states, repeating timer phases, named schedule queues and command cooldowns. Rollback restores the complete checkpoint and re-registers that exact set. See the lead decisions in `brief/prompts/P1B_ENGINE_HARDENING.md` and executable API contract in `docs/MOD_API.md`.
+
+M1 performance gates: isolated 300 entities + three mods + 900 ticks, avg ≤3 ms, p99 ≤10 ms, max ≤25 ms locally; CI thresholds ×3. Installed-Chrome 10-second overlay gate with ≥300 entities: avg ≥58 FPS, p5 ≥50 FPS.
+
 ### 3.3 Round state machine (server)
 
 `IDLE → COLLECTING (ideas, e.g. 90s) → CURATING (Producer) → VOTING (e.g. 45s) → [STREAMER_APPROVAL optional] → BUILDING → TESTING → DEPLOYING → LIVE → IDLE`, plus `FAILED` and `ROLLED_BACK`. All timings configurable. One build at a time; next round can collect ideas while a build runs.

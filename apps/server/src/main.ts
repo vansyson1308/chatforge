@@ -7,7 +7,9 @@ import { Worker } from "node:worker_threads";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
+import { config } from "dotenv";
 
+config({ path: resolve(process.cwd(), "../../.env"), quiet: true });
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new Error("Invalid PORT");
@@ -119,7 +121,11 @@ const server = createServer(async (req, res) => {
       throw new Error("Expected an object");
     const value = input as Record<string, unknown>;
     const route = req.url.slice(5);
-    if (!["join", "event", "command", "load", "unload"].includes(route)) {
+    if (
+      !["join", "event", "command", "load", "unload", "populate"].includes(
+        route,
+      )
+    ) {
       json(res, 404, { error: "Not found" });
       return;
     }

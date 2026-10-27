@@ -16,7 +16,9 @@
     "test:e2e": "node scripts/e2e-unavailable.mjs",
     "format": "prettier --write .",
     "smoke:codex": "pnpm --filter @chatforge/server smoke:codex",
-    "smoke:openai": "pnpm --filter @chatforge/server smoke:openai"
+    "smoke:openai": "pnpm --filter @chatforge/server smoke:openai",
+    "test:perf": "vitest run --config vitest.perf.config.ts",
+    "test:fps": "node scripts/measure-overlay.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

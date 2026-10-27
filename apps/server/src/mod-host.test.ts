@@ -1,51 +1,221 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { World } from "../../../packages/engine/src/index.js";
 import { ModHost } from "./mod-host.js";
-
-it("replaces a mod atomically and rolls back an error to the previous version", async () => {
-  const world = new World(42);
-  const host = new ModHost(world);
-  const sprite = `{grid:['aa','aa'],palette:{a:'#ff8800'}}`;
-  const original = `export function register(api) {
-    api.defineEnemy('ember',{sprite:${sprite},hp:10,speed:1,damage:2,behavior:'chase'});
-    api.on('twitch:sub',()=>api.spawn('ember',1,2));
-  }`;
-  const broken = `export function register(api) {
-    api.defineEnemy('replacement',{sprite:${sprite},hp:10,speed:1,damage:2,behavior:'chase'});
-    api.on('twitch:sub',()=>{api.spawn('replacement',5,6); throw Error('broken');});
-  }`;
+const sprite = `{grid:['aa'],palette:{a:'#ff8800'}}`;
+const original = `export function register(api) {
+ api.defineEnemy('ember',{sprite:${sprite},hp:10,speed:1,damage:2,behavior:'chase'});
+ api.onSchedule('later', p => { api.state.count = (api.state.count || 0)+p.n; api.spawn('ember',300,500); });
+ api.on('twitch:sub',()=>api.schedule('later',7,{n:2}));
+ api.every(5,()=>{api.state.beats=(api.state.beats||0)+1;});
+ api.registerCommand('!go',()=>api.spawn('ember',100,200),{cooldownSec:2});
+}`;
+it("restores full-world hash and deterministic continuation after a bad deployment", async () => {
+  const world = new World(42),
+    host = new ModHost(world),
+    control = new ModHost(new World(1));
   try {
     await host.load("test", original);
-    await host.load("test", broken);
+    world.joinViewer("Ada");
+    for (let i = 0; i < 8; i++) host.tick();
     host.dispatch({ type: "twitch:sub" });
-    expect(world.state.entities).toHaveLength(0);
-    expect(world.state.events.some((event) => event.type === "mod_error")).toBe(
-      true,
+    host.command("!go", "Ada", "");
+    const checkpoint = host.checkpoint(),
+      hash = world.hash();
+    control.restore(checkpoint);
+    await host.load(
+      "test",
+      `export function register(api){api.on('twitch:sub',()=>{api.rules.set('waveSize',99);api.fx.banner('discard');api.random();api.schedule('bad',5,{});throw Error('broken');});api.onSchedule('bad',()=>{});}`,
+    );
+    for (let i = 0; i < 3; i++) host.tick();
+    host.dispatch({ type: "twitch:sub" });
+    expect(world.hash()).toBe(hash);
+    expect(host.diagnostics[0]?.modId).toBe("test");
+    expect(host.diagnostics[0]?.stack).toBeTruthy();
+    for (let i = 0; i < 90; i++) {
+      host.tick();
+      control.tick();
+    }
+    expect(world.hash()).toBe(control.world.hash());
+    expect(world.state.mods.test?.state.beats).toBe(19);
+  } finally {
+    host.dispose();
+    control.dispose();
+  }
+});
+it("checkpoints scheduled payloads, repeating phase, cooldowns and mod sets for restart", async () => {
+  const host = new ModHost(new World(123)),
+    restored = new ModHost(new World(2));
+  try {
+    await host.load("test", original);
+    for (let i = 0; i < 3; i++) host.tick();
+    host.dispatch({ type: "twitch:sub" });
+    host.command("!go", "Ada", "");
+    const checkpoint = JSON.parse(JSON.stringify(host.checkpoint()));
+    restored.restore(checkpoint);
+    host.command("!go", "Ada", "");
+    restored.command("!go", "Ada", "");
+    for (let i = 0; i < 60; i++) {
+      host.tick();
+      restored.tick();
+    }
+    expect(restored.world.hash()).toBe(host.world.hash());
+    expect(host.world.state.mods.test?.state.count).toBe(2);
+  } finally {
+    host.dispose();
+    restored.dispose();
+  }
+});
+it("discarded buffers cannot leak RNG, damage, spawns or schedules even if budget errors are caught", async () => {
+  const world = new World(1),
+    host = new ModHost(world);
+  try {
+    world.joinViewer("Ada");
+    const hash = world.hash();
+    await host.load(
+      "flood",
+      `export function register(api){api.on('twitch:sub',()=>{api.random();api.query({team:'hero'})[0].damage(20);for(let i=0;i<300;i++){try{api.fx.banner('flood');}catch{}}});}`,
     );
     host.dispatch({ type: "twitch:sub" });
-    expect(world.state.entities.map((entity) => entity.kind)).toEqual([
-      "ember",
-    ]);
+    expect(world.hash()).toBe(hash);
+    expect(host.diagnostics[0]?.message).toMatch(/budget/i);
+  } finally {
+    host.dispose();
+  }
+});
+it("hot replacement and unload remove owned definitions and entities", async () => {
+  const host = new ModHost(new World(1));
+  try {
+    await host.load("test", original);
+    host.command("!go", "Ada", "");
+    await host.load(
+      "test",
+      `export function register(api){api.on('twitch:sub',()=>api.fx.banner('new'));}`,
+    );
+    host.dispatch({ type: "twitch:sub" });
+    expect(host.world.state.fx.some((f) => f.text === "new")).toBe(true);
+    expect(host.sprites().ember).toBeUndefined();
+    host.unload("test");
+    expect(host.world.state.entities).toHaveLength(0);
+    expect(host.world.state.mods).toEqual({});
   } finally {
     host.dispose();
   }
 });
 
-it("disables a mod that tries to suppress a host budget violation", async () => {
-  const world = new World(1);
-  const host = new ModHost(world);
+it("does not deep-copy or hash the world on ordinary ticks/callbacks", async () => {
+  const host = new ModHost(new World(7));
+  try {
+    await host.load("test", original);
+    const snapshot = vi.spyOn(host.world, "snapshot"),
+      hash = vi.spyOn(host.world, "hash");
+    for (let i = 0; i < 299; i++) host.tick();
+    expect(snapshot).not.toHaveBeenCalled();
+    expect(hash).not.toHaveBeenCalled();
+    host.tick();
+    expect(snapshot).toHaveBeenCalledTimes(1);
+  } finally {
+    host.dispose();
+  }
+});
+it("rolls back every mod state and rules, not just the failing mod", async () => {
+  const host = new ModHost(new World(7)),
+    control = new ModHost(new World(1));
+  try {
+    await host.load("test", original);
+    await host.load(
+      "other",
+      `export function register(api){api.every(2,()=>{api.state.n=(api.state.n||0)+1;api.rules.set('waveSize',api.state.n);});}`,
+    );
+    for (let i = 0; i < 7; i++) host.tick();
+    const checkpoint = host.checkpoint();
+    control.restore(checkpoint);
+    await host.load(
+      "bad",
+      `export function register(api){api.on('twitch:sub',()=>{api.rules.set('waveSize',99);throw Error('failed deploy');});}`,
+    );
+    for (let i = 0; i < 9; i++) host.tick();
+    host.dispatch({ type: "twitch:sub" });
+    expect(host.world.hash()).toBe(control.world.hash());
+    for (let i = 0; i < 30; i++) {
+      host.tick();
+      control.tick();
+    }
+    expect(host.world.hash()).toBe(control.world.hash());
+  } finally {
+    host.dispose();
+    control.dispose();
+  }
+});
+
+it("bounds projectiles produced by extreme custom weapons to the owning mod budget", async () => {
+  const host = new ModHost(new World(7));
   try {
     await host.load(
-      "flood",
-      `export function register(api) { api.on('twitch:sub', () => {
-      for (let i = 0; i < 300; i++) { try { api.fx.banner('flood'); } catch (_) {} }
-    }); }`,
+      "weapon",
+      `export function register(api){
+   api.defineProjectile('slow',{sprite:${sprite},speed:1,damage:0,lifetime:300});
+   api.defineHeroWeapon('rapid',{damage:0,range:500,cooldown:1,projectile:'slow'});
+   api.on('twitch:raid',()=>{for(const h of api.query({team:'hero'}))h.equip('rapid');});
+  }`,
     );
+    for (let i = 0; i < 10; i++)
+      host.world.spawn({
+        kind: "hero",
+        team: "hero",
+        x: 100,
+        y: 200 + i * 40,
+        hp: 10000,
+        speed: 0,
+      });
+    host.world.spawn({
+      kind: "target",
+      team: "enemy",
+      x: 400,
+      y: 400,
+      hp: 100000,
+      speed: 0,
+      damage: 0,
+    });
+    host.dispatch({ type: "twitch:raid" });
+    for (let i = 0; i < 60; i++) host.tick();
+    expect(
+      host.world.state.entities.filter((e) => e.tags.includes("mod:weapon")),
+    ).toHaveLength(100);
+    expect(host.diagnostics).toEqual([]);
+  } finally {
+    host.dispose();
+  }
+});
+it("explicit last-good rollback restores the periodic checkpoint", async () => {
+  const host = new ModHost(new World(7));
+  try {
+    await host.load("test", original);
+    for (let i = 0; i < 300; i++) host.tick();
+    const hash = host.world.hash();
+    for (let i = 0; i < 5; i++) host.tick();
+    host.rollbackToLastGood();
+    expect(host.world.hash()).toBe(hash);
+  } finally {
+    host.dispose();
+  }
+});
+
+it("a failure in an older mod restores its own deployment checkpoint, removing later changes too", async () => {
+  const host = new ModHost(new World(19));
+  try {
+    const before = host.world.hash();
+    await host.load(
+      "older",
+      `export function register(api){api.on('twitch:sub',()=>{throw Error('old failure');});}`,
+    );
+    await host.load(
+      "newer",
+      `export function register(api){api.every(1,()=>api.rules.set('waveSize',99));}`,
+    );
+    for (let i = 0; i < 10; i++) host.tick();
     host.dispatch({ type: "twitch:sub" });
-    expect(world.state.fx.filter((fx) => fx.text === "flood")).toHaveLength(0);
-    expect(world.state.events.some((event) => event.type === "mod_error")).toBe(
-      true,
-    );
+    expect(host.world.hash()).toBe(before);
+    expect(host.world.state.mods).toEqual({});
   } finally {
     host.dispose();
   }
