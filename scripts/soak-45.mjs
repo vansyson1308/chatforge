@@ -5,6 +5,15 @@ import { resolve, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { DatabaseSync } from "node:sqlite";
 import { chromium } from "playwright-core";
+import { createServer } from "node:net";
+// Never send fixture controls to an unrelated process occupying the test port.
+const portProbe = createServer();
+await new Promise((resolvePromise, reject) =>
+  portProbe.once("error", reject).listen(3098, "127.0.0.1", resolvePromise),
+);
+await new Promise((resolvePromise, reject) =>
+  portProbe.close((error) => (error ? reject(error) : resolvePromise())),
+);
 const tmp = resolve("runtime/tmp");
 await mkdir(tmp, { recursive: true });
 const data = await mkdtemp(join(tmp, "soak45-")),
@@ -268,10 +277,13 @@ try {
       !restarted &&
       Date.now() - started >= duration / 2 &&
       (!build || !["BUILDING", "TESTING", "DEPLOYING"].includes(build.stage)) &&
-      round?.stage === "COLLECTING"
+      ["COLLECTING", "VOTING", "STREAMER_APPROVAL"].includes(round?.stage)
     ) {
       const before = {
         mods: view.mods.map((x) => x.id),
+        roundId: round.id,
+        roundStage: round.stage,
+        tallies: round.tallies,
         tick: await page.evaluate(() =>
           Number(document.querySelector("canvas")?.dataset.tick),
         ),
@@ -289,6 +301,9 @@ try {
       const afterView = await (await fetch(base + "/api/forge")).json(),
         after = {
           mods: afterView.mods.map((x) => x.id),
+          roundId: afterView.round?.id,
+          roundStage: afterView.round?.stage,
+          tallies: afterView.round?.tallies,
           tick: await page.evaluate(() =>
             Number(document.querySelector("canvas")?.dataset.tick),
           ),
@@ -307,7 +322,7 @@ try {
       round?.stage === "FAILED" &&
       !["BUILDING", "TESTING", "DEPLOYING"].includes(build?.stage)
     ) {
-      result.errors.push("Curation failed; restart requested");
+      result.errors.push(`Round ${round.id} failed; restart requested`);
       await post("stop");
       await post("start", { preset: "demo" });
     }

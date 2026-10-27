@@ -1,0 +1,1733 @@
+{
+  "startedAt": "2026-10-27T13:48:17.951Z",
+  "durationMs": 2700068,
+  "requiredMs": 2700000,
+  "intensity": "normal",
+  "preset": "demo",
+  "rounds": [
+    {
+      "id": 1,
+      "status": "LIVE",
+      "title": "Forecast: Smug",
+      "credits": [
+        {
+          "id": "sim-7",
+          "name": "ChaosBean",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-4",
+          "name": "DuckKnight",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 82351,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 67 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 67 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "5b67afb8"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "status": "LIVE",
+      "title": "Crabaret Entrance",
+      "credits": [
+        {
+          "id": "sim-1",
+          "name": "AnvilAda",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-12",
+          "name": "SparkSage",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-7",
+          "name": "ChaosBean",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 62762,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 47 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 47 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "30918744"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "status": "LIVE",
+      "title": "Ice Cube Meltdown",
+      "credits": [
+        {
+          "id": "sim-9",
+          "name": "GearGnome",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 65044,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 32 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 32 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "2650c3ad"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "status": "LIVE",
+      "title": "Shell Shock Special",
+      "credits": [
+        {
+          "id": "sim-17",
+          "name": "CloudCrafter",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-15",
+          "name": "FrogForge",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 49573,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 79 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 79 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "d6f78634"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "status": "LIVE",
+      "title": "Beeware the Swarm",
+      "credits": [
+        {
+          "id": "sim-7",
+          "name": "ChaosBean",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-8",
+          "name": "LunaLurk",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-17",
+          "name": "CloudCrafter",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-3",
+          "name": "星の鍛冶屋",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-16",
+          "name": "TinyTroll",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 52299,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 51 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 51 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "7ef360fa"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "status": "LIVE",
+      "title": "Beetle Gold Rush",
+      "credits": [
+        {
+          "id": "sim-18",
+          "name": "CrownCat",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-6",
+          "name": "PixelBao",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-13",
+          "name": "MossMoth",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 50551,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 127 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 127 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "031dfc77"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "status": "LIVE",
+      "title": "Dragon Delivery",
+      "credits": [
+        {
+          "id": "sim-16",
+          "name": "TinyTroll",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-4",
+          "name": "DuckKnight",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-12",
+          "name": "SparkSage",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-20",
+          "name": "QuietQuokka",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 50074,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 25 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 25 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "75bbd61c"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "status": "LIVE",
+      "title": "Jelly Zoomies",
+      "credits": [
+        {
+          "id": "sim-7",
+          "name": "ChaosBean",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 45864,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 25 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 25 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "4f31a8e6"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "status": "LIVE",
+      "title": "Boot Camp Parade",
+      "credits": [
+        {
+          "id": "sim-4",
+          "name": "DuckKnight",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-20",
+          "name": "QuietQuokka",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-6",
+          "name": "PixelBao",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-7",
+          "name": "ChaosBean",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-19",
+          "name": "EmberEli",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-13",
+          "name": "MossMoth",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-8",
+          "name": "LunaLurk",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 51230,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 66 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 66 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "72397eea"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "status": "LIVE",
+      "title": "Produce Aisle Revolt",
+      "credits": [
+        {
+          "id": "sim-4",
+          "name": "DuckKnight",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-5",
+          "name": "CozySlime",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 56404,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 50 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 50 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "504596fa"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "status": "LIVE",
+      "title": "Waddle Warning",
+      "credits": [
+        {
+          "id": "sim-14",
+          "name": "BánhMì",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-7",
+          "name": "ChaosBean",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-13",
+          "name": "MossMoth",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-18",
+          "name": "CrownCat",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-4",
+          "name": "DuckKnight",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-3",
+          "name": "星の鍛冶屋",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 46512,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 47 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 47 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "e87b2683"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "status": "LIVE",
+      "title": "Disco 'Stache Bash",
+      "credits": [
+        {
+          "id": "sim-5",
+          "name": "CozySlime",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-1",
+          "name": "AnvilAda",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-7",
+          "name": "ChaosBean",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-13",
+          "name": "MossMoth",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 56982,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 91 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 91 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "43e61bd6"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "status": "FAILED",
+      "title": "Bean There, Fought That",
+      "credits": [
+        {
+          "id": "sim-11",
+          "name": "橘子骑士",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-8",
+          "name": "LunaLurk",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-2",
+          "name": "MưaNhỏ",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-13",
+          "name": "MossMoth",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-12",
+          "name": "SparkSage",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-1",
+          "name": "AnvilAda",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-17",
+          "name": "CloudCrafter",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-9",
+          "name": "GearGnome",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 0,
+      "attempts": 0
+    },
+    {
+      "id": 14,
+      "status": "LIVE",
+      "title": "Pizza the Action",
+      "credits": [
+        {
+          "id": "sim-17",
+          "name": "CloudCrafter",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-12",
+          "name": "SparkSage",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-9",
+          "name": "GearGnome",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 56672,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 59 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 59 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "60886d1f"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "status": "LIVE",
+      "title": "Treble Trouble",
+      "credits": [
+        {
+          "id": "sim-19",
+          "name": "EmberEli",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-13",
+          "name": "MossMoth",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 55599,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 59 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 59 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "468e7430"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "status": "LIVE",
+      "title": "Bolt Action",
+      "credits": [
+        {
+          "id": "sim-2",
+          "name": "MưaNhỏ",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-16",
+          "name": "TinyTroll",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-1",
+          "name": "AnvilAda",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-12",
+          "name": "SparkSage",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-17",
+          "name": "CloudCrafter",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 60445,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 59 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 59 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "2f7285bb"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "status": "LIVE",
+      "title": "Duck Forecast",
+      "credits": [
+        {
+          "id": "sim-18",
+          "name": "CrownCat",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-11",
+          "name": "橘子骑士",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 50520,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 31 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 31 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "7126a366"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "status": "LIVE",
+      "title": "Gem and the Holograms",
+      "credits": [
+        {
+          "id": "sim-15",
+          "name": "FrogForge",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-1",
+          "name": "AnvilAda",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-17",
+          "name": "CloudCrafter",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-6",
+          "name": "PixelBao",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-13",
+          "name": "MossMoth",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 52016,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 49 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 49 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "caabaf6c"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "status": "LIVE",
+      "title": "Glazed and Confused",
+      "credits": [
+        {
+          "id": "sim-18",
+          "name": "CrownCat",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-16",
+          "name": "TinyTroll",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-4",
+          "name": "DuckKnight",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-14",
+          "name": "BánhMì",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 49819,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 31 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 31 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "fbd1e04e"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "status": "LIVE",
+      "title": "Bubble Trouble",
+      "credits": [
+        {
+          "id": "sim-19",
+          "name": "EmberEli",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-2",
+          "name": "MưaNhỏ",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 52948,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 74 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 74 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "c843f9a1"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "status": "LIVE",
+      "title": "Mallow Mayhem",
+      "credits": [
+        {
+          "id": "sim-20",
+          "name": "QuietQuokka",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-3",
+          "name": "星の鍛冶屋",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-12",
+          "name": "SparkSage",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-16",
+          "name": "TinyTroll",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-2",
+          "name": "MưaNhỏ",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-10",
+          "name": "NoodleMage",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 46909,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 54 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 54 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "0ba4dd9e"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "status": "LIVE",
+      "title": "Heart on Duty",
+      "credits": [
+        {
+          "id": "sim-18",
+          "name": "CrownCat",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-4",
+          "name": "DuckKnight",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 49147,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 199 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 199 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "4e516c88"
+        }
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "minute": 0.06116666666666667,
+      "rssMiB": 102.109375,
+      "tickP99UpperMs": null,
+      "fps": {
+        "count": 85,
+        "avg": 56.666666666666664,
+        "p5": 36.10108303249091
+      },
+      "liveMods": 0
+    },
+    {
+      "minute": 1.0632833333333334,
+      "rssMiB": 96.76953125,
+      "tickP99UpperMs": 0.6,
+      "fps": {
+        "count": 600,
+        "avg": 144.0092165898617,
+        "p5": 140.84507042256408
+      },
+      "liveMods": 0
+    },
+    {
+      "minute": 2.0787833333333334,
+      "rssMiB": 104.2109375,
+      "tickP99UpperMs": 0.7,
+      "fps": {
+        "count": 600,
+        "avg": 142.10937685038232,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 0
+    },
+    {
+      "minute": 3.0898333333333334,
+      "rssMiB": 104.921875,
+      "tickP99UpperMs": 1,
+      "fps": {
+        "count": 600,
+        "avg": 144.0023040368644,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 0
+    },
+    {
+      "minute": 4.096133333333333,
+      "rssMiB": 109.51171875,
+      "tickP99UpperMs": 1.6,
+      "fps": {
+        "count": 600,
+        "avg": 144.00230403686538,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 1
+    },
+    {
+      "minute": 5.1082,
+      "rssMiB": 109.8359375,
+      "tickP99UpperMs": 1.7,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 1
+    },
+    {
+      "minute": 6.120933333333333,
+      "rssMiB": 113.359375,
+      "tickP99UpperMs": 1.7,
+      "fps": {
+        "count": 600,
+        "avg": 144.00230403686538,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 2
+    },
+    {
+      "minute": 7.13575,
+      "rssMiB": 116.7890625,
+      "tickP99UpperMs": 2.4,
+      "fps": {
+        "count": 600,
+        "avg": 144.00230403686538,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 2
+    },
+    {
+      "minute": 8.13515,
+      "rssMiB": 128.75390625,
+      "tickP99UpperMs": 2.8,
+      "fps": {
+        "count": 600,
+        "avg": 143.99884800921754,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 3
+    },
+    {
+      "minute": 9.145766666666667,
+      "rssMiB": 136.75,
+      "tickP99UpperMs": 2.8,
+      "fps": {
+        "count": 600,
+        "avg": 144.00230403686538,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 3
+    },
+    {
+      "minute": 10.150716666666666,
+      "rssMiB": 140.6796875,
+      "tickP99UpperMs": 2.7,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 4
+    },
+    {
+      "minute": 11.165816666666666,
+      "rssMiB": 166.1171875,
+      "tickP99UpperMs": 2.8,
+      "fps": {
+        "count": 600,
+        "avg": 143.9988480092135,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 4
+    },
+    {
+      "minute": 12.169466666666667,
+      "rssMiB": 184.78125,
+      "tickP99UpperMs": 2.9,
+      "fps": {
+        "count": 600,
+        "avg": 144.00230403686538,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 5
+    },
+    {
+      "minute": 13.180316666666666,
+      "rssMiB": 231.3046875,
+      "tickP99UpperMs": 2.9,
+      "fps": {
+        "count": 600,
+        "avg": 143.29384791746435,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 6
+    },
+    {
+      "minute": 14.190833333333334,
+      "rssMiB": 214.58203125,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 6
+    },
+    {
+      "minute": 15.192466666666666,
+      "rssMiB": 195.70703125,
+      "tickP99UpperMs": 2.9,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 7
+    },
+    {
+      "minute": 16.204016666666668,
+      "rssMiB": 215.2734375,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 144.00230403686538,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 7
+    },
+    {
+      "minute": 17.215866666666667,
+      "rssMiB": 192.5,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 143.757337614109,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 8
+    },
+    {
+      "minute": 18.230533333333334,
+      "rssMiB": 234.59765625,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042530646
+      },
+      "liveMods": 8
+    },
+    {
+      "minute": 19.242133333333335,
+      "rssMiB": 245.09765625,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 136.9300287553046,
+        "p5": 72.9927007301751
+      },
+      "liveMods": 9
+    },
+    {
+      "minute": 20.253183333333332,
+      "rssMiB": 242.4453125,
+      "tickP99UpperMs": 3.1,
+      "fps": {
+        "count": 600,
+        "avg": 144.00230403686137,
+        "p5": 140.84507042530646
+      },
+      "liveMods": 9
+    },
+    {
+      "minute": 21.258183333333335,
+      "rssMiB": 229.90234375,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042530646
+      },
+      "liveMods": 10
+    },
+    {
+      "minute": 22.260733333333334,
+      "rssMiB": 235.125,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042530646
+      },
+      "liveMods": 10
+    },
+    {
+      "minute": 23.261833333333332,
+      "rssMiB": 239.19921875,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042530646
+      },
+      "liveMods": 11
+    },
+    {
+      "minute": 24.273366666666668,
+      "rssMiB": 229.859375,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042530646
+      },
+      "liveMods": 11
+    },
+    {
+      "minute": 25.2876,
+      "rssMiB": 242.91796875,
+      "tickP99UpperMs": 3,
+      "fps": {
+        "count": 600,
+        "avg": 141.874157622186,
+        "p5": 140.84507042530646
+      },
+      "liveMods": 12
+    },
+    {
+      "minute": 26.295133333333332,
+      "rssMiB": 109.19921875,
+      "tickP99UpperMs": 5.9,
+      "fps": {
+        "count": 600,
+        "avg": 143.76422666826406,
+        "p5": 140.84507042256408
+      },
+      "liveMods": 12
+    },
+    {
+      "minute": 27.311566666666668,
+      "rssMiB": 135.42578125,
+      "tickP99UpperMs": 3.8,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 12
+    },
+    {
+      "minute": 28.325066666666668,
+      "rssMiB": 207.74609375,
+      "tickP99UpperMs": 3.9,
+      "fps": {
+        "count": 600,
+        "avg": 141.87751241428234,
+        "p5": 140.84507042241975
+      },
+      "liveMods": 13
+    },
+    {
+      "minute": 29.337366666666668,
+      "rssMiB": 160.828125,
+      "tickP99UpperMs": 3.9,
+      "fps": {
+        "count": 600,
+        "avg": 142.34200037957828,
+        "p5": 140.84507042241975
+      },
+      "liveMods": 13
+    },
+    {
+      "minute": 30.349133333333334,
+      "rssMiB": 239.171875,
+      "tickP99UpperMs": 3.8,
+      "fps": {
+        "count": 600,
+        "avg": 133.13215585337747,
+        "p5": 72.4637681156975
+      },
+      "liveMods": 14
+    },
+    {
+      "minute": 31.3502,
+      "rssMiB": 236.02734375,
+      "tickP99UpperMs": 3.8,
+      "fps": {
+        "count": 600,
+        "avg": 144.00921658986096,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 14
+    },
+    {
+      "minute": 32.36391666666667,
+      "rssMiB": 259.234375,
+      "tickP99UpperMs": 3.7,
+      "fps": {
+        "count": 600,
+        "avg": 138.68343195266198,
+        "p5": 140.8450704218424
+      },
+      "liveMods": 15
+    },
+    {
+      "minute": 33.3742,
+      "rssMiB": 239.72265625,
+      "tickP99UpperMs": 3.6,
+      "fps": {
+        "count": 600,
+        "avg": 142.57877477306369,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 15
+    },
+    {
+      "minute": 34.38883333333333,
+      "rssMiB": 242.984375,
+      "tickP99UpperMs": 3.7,
+      "fps": {
+        "count": 600,
+        "avg": 142.80953967724966,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 16
+    },
+    {
+      "minute": 35.4024,
+      "rssMiB": 284.8515625,
+      "tickP99UpperMs": 3.6,
+      "fps": {
+        "count": 600,
+        "avg": 143.9988480092135,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 16
+    },
+    {
+      "minute": 36.41466666666667,
+      "rssMiB": 243.41796875,
+      "tickP99UpperMs": 3.6,
+      "fps": {
+        "count": 600,
+        "avg": 129.46939127807738,
+        "p5": 123.4567901220373
+      },
+      "liveMods": 17
+    },
+    {
+      "minute": 37.426716666666664,
+      "rssMiB": 246.12109375,
+      "tickP99UpperMs": 3.5,
+      "fps": {
+        "count": 600,
+        "avg": 128.3312657740508,
+        "p5": 123.4567901220373
+      },
+      "liveMods": 17
+    },
+    {
+      "minute": 38.441183333333335,
+      "rssMiB": 261.578125,
+      "tickP99UpperMs": 3.5,
+      "fps": {
+        "count": 600,
+        "avg": 128.32852101379532,
+        "p5": 121.95121951288766
+      },
+      "liveMods": 18
+    },
+    {
+      "minute": 39.45248333333333,
+      "rssMiB": 236.40234375,
+      "tickP99UpperMs": 3.5,
+      "fps": {
+        "count": 600,
+        "avg": 128.33950075934268,
+        "p5": 121.95121951288766
+      },
+      "liveMods": 18
+    },
+    {
+      "minute": 40.46326666666667,
+      "rssMiB": 256.2578125,
+      "tickP99UpperMs": 3.4,
+      "fps": {
+        "count": 600,
+        "avg": 128.21334700942177,
+        "p5": 123.4567901220373
+      },
+      "liveMods": 19
+    },
+    {
+      "minute": 41.47403333333333,
+      "rssMiB": 259.140625,
+      "tickP99UpperMs": 3.4,
+      "fps": {
+        "count": 600,
+        "avg": 127.12941774726734,
+        "p5": 123.4567901220373
+      },
+      "liveMods": 19
+    },
+    {
+      "minute": 42.4857,
+      "rssMiB": 265.23828125,
+      "tickP99UpperMs": 3.3,
+      "fps": {
+        "count": 600,
+        "avg": 128.043705584839,
+        "p5": 123.45679012381166
+      },
+      "liveMods": 20
+    },
+    {
+      "minute": 43.49751666666667,
+      "rssMiB": 275.2890625,
+      "tickP99UpperMs": 3.3,
+      "fps": {
+        "count": 600,
+        "avg": 130.25073266037123,
+        "p5": 123.4567901220373
+      },
+      "liveMods": 20
+    },
+    {
+      "minute": 44.51206666666667,
+      "rssMiB": 300.73046875,
+      "tickP99UpperMs": 3.3,
+      "fps": {
+        "count": 600,
+        "avg": 128.8244766505636,
+        "p5": 123.4567901220373
+      },
+      "liveMods": 21
+    }
+  ],
+  "restart": {
+    "before": {
+      "mods": [
+        "forge-1-1",
+        "forge-1-2",
+        "forge-1-3",
+        "forge-1-4",
+        "forge-1-5",
+        "forge-1-6",
+        "forge-1-7",
+        "forge-1-8",
+        "forge-1-9",
+        "forge-1-10",
+        "forge-1-11",
+        "forge-1-12"
+      ],
+      "tick": 33098
+    },
+    "after": {
+      "mods": [
+        "forge-1-1",
+        "forge-1-2",
+        "forge-1-3",
+        "forge-1-4",
+        "forge-1-5",
+        "forge-1-6",
+        "forge-1-7",
+        "forge-1-8",
+        "forge-1-9",
+        "forge-1-10",
+        "forge-1-11",
+        "forge-1-12"
+      ],
+      "tick": 33003
+    },
+    "modsPreserved": true,
+    "checkpointResumed": true
+  },
+  "rollbacks": 0,
+  "maxLiveMods": 21,
+  "completed": true,
+  "errors": [
+    "Curation failed; restart requested"
+  ],
+  "tickP99UpperMs": 3.1,
+  "finishedAt": "2026-10-27T14:33:18.025Z"
+}

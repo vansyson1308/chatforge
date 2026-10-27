@@ -9,7 +9,7 @@
 - M2 Twitch and Crowd Sim: complete; lead QC approved after a real Twitch live test on vansyson1308 (all seven subscriptions and real chat delivery verified).
 - M3 Forge loop: lead QC requested live checkpoint, parity, overlap and hygiene fixes; addressed together with M4.
 - M4 Overlay HUD, dashboard, Mod API v1.1 and game polish: follow-up QC fixes addressed alongside M5.
-- M5 Hardening, simulated-stream end-to-end test and performance: current milestone; verification in progress. Scope in brief/prompts/P5_POLISH_AND_HARDENING.md.
+- M5 Hardening, simulated-stream end-to-end test and performance: current milestone; implementation and local verification delivered for lead QC. Scope in brief/prompts/P5_POLISH_AND_HARDENING.md.
 - M6 Demo kit.
 
 Update this status when milestones change. Do not build ahead without an explicit request.

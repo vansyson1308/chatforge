@@ -114,6 +114,12 @@ it("requires canonical simulated attribution in generated banners", async () => 
     source: goodMod.replace("forged by the community", "@Ada (SIM)"),
   });
   expect(right.ok, JSON.stringify(right)).toBe(true);
+  const repeated = await gatekeeper({
+    ...input,
+    source: goodMod.replace("forged by the community", "@Ada (SIM) and @Ada"),
+  });
+  expect(repeated.ok).toBe(false);
+  expect(repeated.checks.at(-1)?.detail).toContain("must be followed by (SIM)");
 }, 30000);
 it("marches waves along the ground, damages/rebuilds the keep and presents a fifth-wave boss", () => {
   const world = new World(77);

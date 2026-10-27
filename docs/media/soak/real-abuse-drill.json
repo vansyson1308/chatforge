@@ -1,0 +1,27 @@
+{
+  "kind": "real Producer and moderation; attacker strings blocked locally before model",
+  "rejected": [
+    1,
+    2,
+    3
+  ],
+  "safeIdeaIds": [
+    4
+  ],
+  "cards": [
+    {
+      "title": "Dragon on Duty",
+      "suggestion": false
+    },
+    {
+      "title": "The Pickle Reckoning",
+      "suggestion": true
+    },
+    {
+      "title": "Tin Crown Coronation",
+      "suggestion": true
+    }
+  ],
+  "durationMs": 19171,
+  "noKeyInOutput": true
+}

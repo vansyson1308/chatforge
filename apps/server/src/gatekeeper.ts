@@ -415,17 +415,25 @@ export async function gatekeeper(
             );
           for (const credit of input.credits.filter(
             (c) => c.source === "simulator",
-          ))
-            if (
-              banners.some(
-                (banner) =>
-                  banner.includes(`@${credit.name}`) &&
-                  !banner.includes(formatCredit(credit)),
-              )
-            )
-              throw Error(
-                "Simulated contributor in banner must be followed by (SIM).",
-              );
+          )) {
+            const mention = `@${credit.name}`;
+            for (const banner of banners) {
+              let position = banner.indexOf(mention);
+              while (position !== -1) {
+                const longerName = /^[\p{L}\p{N}_]/u.test(
+                  banner.slice(position + mention.length),
+                );
+                if (
+                  !longerName &&
+                  !banner.startsWith(formatCredit(credit), position)
+                )
+                  throw Error(
+                    "Simulated contributor in banner must be followed by (SIM).",
+                  );
+                position = banner.indexOf(mention, position + mention.length);
+              }
+            }
+          }
         }
         const score =
           (first >= 0 && first <= 300 ? 2 : 0) +

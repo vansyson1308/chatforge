@@ -1,0 +1,513 @@
+{
+  "startedAt": "2026-10-27T13:25:00.289Z",
+  "durationMs": 1042379,
+  "requiredMs": 2700000,
+  "intensity": "normal",
+  "preset": "demo",
+  "rounds": [
+    {
+      "id": 1,
+      "status": "LIVE",
+      "title": "Grin and Thunder It",
+      "credits": [
+        {
+          "id": "sim-7",
+          "name": "ChaosBean",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 140851,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 79 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 79 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "9b3f0ea9"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "status": "LIVE",
+      "title": "Ice to Meet Cubes",
+      "credits": [
+        {
+          "id": "sim-9",
+          "name": "GearGnome",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 53262,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 42 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 42 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "c78b11d3"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "status": "LIVE",
+      "title": "Crabsolutely Incoming",
+      "credits": [
+        {
+          "id": "sim-1",
+          "name": "AnvilAda",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-7",
+          "name": "ChaosBean",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-3",
+          "name": "星の鍛冶屋",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 57210,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 70 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 70 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "5fa33fcc"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "status": "LIVE",
+      "title": "Shell of a Time",
+      "credits": [
+        {
+          "id": "sim-17",
+          "name": "CloudCrafter",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-10",
+          "name": "NoodleMage",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-15",
+          "name": "FrogForge",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 139480,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 64 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 64 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "8cac019b"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "status": "LIVE",
+      "title": "Beetle Gold Rush",
+      "credits": [
+        {
+          "id": "sim-18",
+          "name": "CrownCat",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-6",
+          "name": "PixelBao",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-13",
+          "name": "MossMoth",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 92886,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 42 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 42 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "0af24677"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "status": "LIVE",
+      "title": "Waddle You Do?",
+      "credits": [
+        {
+          "id": "sim-14",
+          "name": "BánhMì",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-13",
+          "name": "MossMoth",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-18",
+          "name": "CrownCat",
+          "source": "simulator"
+        },
+        {
+          "id": "sim-4",
+          "name": "DuckKnight",
+          "source": "simulator"
+        }
+      ],
+      "buildMs": 116438,
+      "attempts": 1,
+      "score": 10,
+      "checks": [
+        {
+          "name": "baseline (host responsibility)",
+          "ok": true,
+          "detail": "900 ticks with live mods; host invariants valid"
+        },
+        {
+          "name": "static contract",
+          "ok": true,
+          "detail": "24 KiB / restricted AST / literal contract"
+        },
+        {
+          "name": "simulation 1",
+          "ok": true,
+          "detail": "900 ticks; 45 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "simulation 2",
+          "ok": true,
+          "detail": "900 ticks; 45 observed effects; bounded world; no rollback"
+        },
+        {
+          "name": "determinism",
+          "ok": true,
+          "detail": "905949c9"
+        }
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "minute": 0.12405,
+      "rssMiB": 101.0859375,
+      "tickP99UpperMs": null,
+      "fps": {
+        "count": 182,
+        "avg": 80.24691358024691,
+        "p5": 140.84507042253702
+      },
+      "liveMods": 0
+    },
+    {
+      "minute": 1.1443333333333334,
+      "rssMiB": 95.84765625,
+      "tickP99UpperMs": 10.3,
+      "fps": {
+        "count": 600,
+        "avg": 140.95094906972363,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 0
+    },
+    {
+      "minute": 2.1473166666666668,
+      "rssMiB": 125.9765625,
+      "tickP99UpperMs": 10.3,
+      "fps": {
+        "count": 600,
+        "avg": 139.81125480601187,
+        "p5": 140.8450704227084
+      },
+      "liveMods": 0
+    },
+    {
+      "minute": 3.1537333333333333,
+      "rssMiB": 100.81640625,
+      "tickP99UpperMs": 11.9,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 0
+    },
+    {
+      "minute": 4.170333333333334,
+      "rssMiB": 105.734375,
+      "tickP99UpperMs": 10.5,
+      "fps": {
+        "count": 600,
+        "avg": 144.00230403686538,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 0
+    },
+    {
+      "minute": 5.181333333333333,
+      "rssMiB": 108.41796875,
+      "tickP99UpperMs": 7.7,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 1
+    },
+    {
+      "minute": 6.1961,
+      "rssMiB": 108.68359375,
+      "tickP99UpperMs": 7,
+      "fps": {
+        "count": 600,
+        "avg": 144.0023040368634,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 1
+    },
+    {
+      "minute": 7.2073,
+      "rssMiB": 114.81640625,
+      "tickP99UpperMs": 6.3,
+      "fps": {
+        "count": 600,
+        "avg": 144.0057602304092,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 2
+    },
+    {
+      "minute": 8.22245,
+      "rssMiB": 132.203125,
+      "tickP99UpperMs": 6,
+      "fps": {
+        "count": 600,
+        "avg": 143.99884800921552,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 2
+    },
+    {
+      "minute": 9.237583333333333,
+      "rssMiB": 132.7109375,
+      "tickP99UpperMs": 5.7,
+      "fps": {
+        "count": 600,
+        "avg": 124.3239883135457,
+        "p5": 71.94244604304497
+      },
+      "liveMods": 3
+    },
+    {
+      "minute": 10.239316666666667,
+      "rssMiB": 132.24609375,
+      "tickP99UpperMs": 6.8,
+      "fps": {
+        "count": 600,
+        "avg": 142.57538673573887,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 3
+    },
+    {
+      "minute": 11.2478,
+      "rssMiB": 132.4609375,
+      "tickP99UpperMs": 7.7,
+      "fps": {
+        "count": 600,
+        "avg": 140.2622904832013,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 3
+    },
+    {
+      "minute": 12.253033333333333,
+      "rssMiB": 118.65625,
+      "tickP99UpperMs": 9.2,
+      "fps": {
+        "count": 600,
+        "avg": 89.16629514043692,
+        "p5": 71.42857142857143
+      },
+      "liveMods": 4
+    },
+    {
+      "minute": 13.269033333333333,
+      "rssMiB": 119.2890625,
+      "tickP99UpperMs": 11.7,
+      "fps": {
+        "count": 600,
+        "avg": 112.94542853378158,
+        "p5": 71.94244604304497
+      },
+      "liveMods": 4
+    },
+    {
+      "minute": 14.278416666666667,
+      "rssMiB": 171.8515625,
+      "tickP99UpperMs": 13.9,
+      "fps": {
+        "count": 600,
+        "avg": 85.71673476385125,
+        "p5": 48.07692307681545
+      },
+      "liveMods": 4
+    },
+    {
+      "minute": 15.28365,
+      "rssMiB": 121.54296875,
+      "tickP99UpperMs": 15.6,
+      "fps": {
+        "count": 600,
+        "avg": 142.80953967724966,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 5
+    },
+    {
+      "minute": 16.29875,
+      "rssMiB": 133.078125,
+      "tickP99UpperMs": 15.8,
+      "fps": {
+        "count": 600,
+        "avg": 143.28700386874831,
+        "p5": 142.85714285714286
+      },
+      "liveMods": 5
+    },
+    {
+      "minute": 17.299433333333333,
+      "rssMiB": 177.47265625,
+      "tickP99UpperMs": 15.9,
+      "fps": {
+        "count": 600,
+        "avg": 141.87751241428234,
+        "p5": 140.84507042299708
+      },
+      "liveMods": 5
+    }
+  ],
+  "restart": null,
+  "rollbacks": 0,
+  "maxLiveMods": 5,
+  "completed": false,
+  "errors": [
+    "Error: database is locked"
+  ]
+}
