@@ -29,17 +29,19 @@ TypeScript everywhere, Node 24, **pnpm workspaces monorepo**, ESM, `strict` TS.
 apps/
   server/      Node service: Twitch auth + EventSub WebSocket, chat send, round state machine,
                Producer, Builder (Codex SDK), Gatekeeper, persistence, WebSocket hub, serves overlay & dashboard builds
-  overlay/     Vite + TS + Canvas2D (no heavy framework): game renderer + Forge HUD; OBS browser source
+  overlay/     Vite + TS + Canvas2D (no heavy framework): pure snapshot renderer + Forge HUD; OBS browser source
   dashboard/   Vite + React: streamer control panel
 packages/
-  engine/      Deterministic game runtime (fixed tick, seeded RNG, ECS-lite), runs in browser AND Node (headless)
-  sandbox/     Mod execution in QuickJS (quickjs-emscripten): same sandbox in browser and Node; memory + time limits;
+  engine/      Deterministic game runtime (fixed tick, seeded RNG, ECS-lite), runs in a Node worker or headless tests
+  sandbox/     Mod execution in QuickJS (quickjs-emscripten) in Node; memory + time limits;
                interrupt handler stops infinite loops; zero host access
   mod-api/     The ONLY surface mods can touch: typed API + markdown docs written for the AI Builder + examples
   shared/      Protocol types + zod schemas for every WS message and persisted record
 runtime/       (gitignored) forge workspace for the Builder, sqlite db, logs
 docs/          ARCHITECTURE.md, MOD_API.md, SECURITY.md, CODEX_JOURNEY.md, DEMO_SCRIPT.md
 ```
+
+The simulation is server-authoritative: `apps/server` owns a Node `worker_thread` running the engine and all mods, isolated from server I/O. The overlay only renders WebSocket snapshots at approximately 20–30 Hz and interpolates at 60 fps. The headless engine used by tests and the Gatekeeper is the same engine without the worker. This makes the server the single source of truth for persistence and rollback; QuickJS is required only in Node.
 
 ### 3.1 Seed game: "Forge Keep"
 
