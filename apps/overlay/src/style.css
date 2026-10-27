@@ -13,3 +13,20 @@ canvas {
   object-fit: contain;
   image-rendering: pixelated;
 }
+
+.sound-toggle {
+  position: fixed;
+  right: 20px;
+  bottom: 6px;
+  background: #172231;
+  color: #ffbd78;
+  border: 1px solid #6c543a;
+  font: 12px monospace;
+  padding: 5px;
+  opacity: 0.25;
+  cursor: pointer;
+}
+.sound-toggle:hover,
+.sound-toggle:focus {
+  opacity: 1;
+}

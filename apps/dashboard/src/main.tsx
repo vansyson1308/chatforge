@@ -239,7 +239,10 @@ function Dashboard() {
                     </span>
                     <strong>{idea.author}</strong>
                     <p>{idea.text}</p>
-                    <small>{idea.status}</small>
+                    <small>
+                      {idea.status}
+                      {idea.reason ? ` — ${idea.reason}` : ""}
+                    </small>
                   </li>
                 ))}
               </ol>

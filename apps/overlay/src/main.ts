@@ -1,4 +1,6 @@
 import "./style.css";
+import { cue, toggleAudio } from "./audio.js";
+import { drawVisualFx } from "./visual-fx.js";
 import { renderSnapshotSchema } from "../../../packages/shared/src/protocol.js";
 import { appearance, placeLabels, type Label } from "./presentation.js";
 import {
@@ -19,6 +21,8 @@ type Entity = {
   level: number;
   joined: number;
   simulated?: boolean;
+  scale?: number;
+  hat?: string;
 };
 type Fx = { type: string; [key: string]: string | number | boolean };
 type Sprite = { grid: string[]; palette: Record<string, string> };
@@ -43,6 +47,11 @@ const transparent =
   new URLSearchParams(location.search).get("mode") === "overlay";
 const effects: TimedFx[] = [];
 const atlas = new Map<string, HTMLCanvasElement>();
+const labelWidths = new Map<string, number>();
+const looks = new Map<string, ReturnType<typeof appearance>>();
+const spriteKeys = new WeakMap<Sprite, string>();
+const labelFont =
+  'bold 12px "Segoe UI", "Microsoft YaHei", "Yu Gothic", "Noto Sans", sans-serif';
 let current: Message | undefined;
 let previous: Message | undefined;
 let receivedAt = 0;
@@ -53,6 +62,21 @@ let oldEntities = new Map<number, Entity>();
 let sortedEntities: Entity[] = [];
 let forge: ForgeView | undefined;
 let forgeReceived = 0;
+const query = new URLSearchParams(location.search),
+  dev = query.get("dev") === "1";
+let hall = query.get("hall") === "1";
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "h") hall = !hall;
+  if (e.key.toLowerCase() === "a") switchAudio();
+});
+const sound = document.createElement("button");
+sound.textContent = "SOUND OFF";
+sound.className = "sound-toggle";
+function switchAudio(): void {
+  sound.textContent = toggleAudio() ? "SOUND OFF" : "SOUND ON";
+}
+sound.onclick = switchAudio;
+document.body.append(sound);
 
 function connect(): void {
   const socket = new WebSocket(
@@ -70,6 +94,22 @@ function connect(): void {
       const payload: unknown = JSON.parse(String(event.data));
       const forgeMessage = forgeViewSchema.safeParse(payload);
       if (forgeMessage.success) {
+        if (
+          forgeMessage.data.build?.stage === "LIVE" &&
+          (forge?.build?.stage !== "LIVE" ||
+            forge.build.id !== forgeMessage.data.build.id)
+        ) {
+          cue("anvil");
+          effects.push({
+            type: "particles",
+            x: 600,
+            y: 215,
+            color: "#ffb65b",
+            count: 80,
+            start: performance.now(),
+            duration: 2000,
+          });
+        }
         forge = forgeMessage.data;
         forgeReceived = performance.now();
         return;
@@ -96,6 +136,8 @@ function connect(): void {
               level,
               joined,
               simulated,
+              scale,
+              hat,
             ]) => ({
               id,
               kind,
@@ -108,6 +150,8 @@ function connect(): void {
               level,
               joined,
               simulated,
+              scale,
+              hat,
             }),
           ),
         },
@@ -124,6 +168,10 @@ function connect(): void {
       canvas!.dataset.tick = String(wire.tick);
       receivedAt = performance.now();
       for (const fx of data.fx ?? []) {
+        if (fx.type === "sfx") {
+          cue(String(fx.cue));
+          continue;
+        }
         const duration =
           typeof fx.ticks === "number"
             ? (fx.ticks * 1000) / 30
@@ -153,7 +201,7 @@ async function action(
   }
 }
 window.addEventListener("keydown", (event) => {
-  if (event.repeat) return;
+  if (event.repeat || !dev) return;
   if (event.key.toLowerCase() === "j")
     void action("join", { viewer: `Viewer${++joinSequence}` });
   if (event.key.toLowerCase() === "s")
@@ -170,8 +218,18 @@ function pixelSprite(
   custom?: Sprite,
   viewer = "",
 ): HTMLCanvasElement {
-  const look = appearance(viewer);
-  const key = kind + (custom ? JSON.stringify(custom) : String(look.variant));
+  let look = looks.get(viewer);
+  if (!look) {
+    look = appearance(viewer);
+    if (looks.size >= 1024) looks.clear();
+    looks.set(viewer, look);
+  }
+  let customKey = custom ? spriteKeys.get(custom) : undefined;
+  if (custom && !customKey) {
+    customKey = JSON.stringify(custom);
+    spriteKeys.set(custom, customKey);
+  }
+  const key = kind + (customKey ?? String(look.variant));
   const cached = atlas.get(key);
   if (cached) return cached;
   const sprite = document.createElement("canvas");
@@ -247,9 +305,37 @@ function pixelSprite(
   atlas.set(key, sprite);
   return sprite;
 }
+const actorAtlases = new WeakMap<
+  HTMLCanvasElement,
+  Map<number, HTMLCanvasElement>
+>();
+function actorSprite(
+  sprite: HTMLCanvasElement,
+  size: number,
+): HTMLCanvasElement {
+  let sizes = actorAtlases.get(sprite);
+  if (!sizes) {
+    sizes = new Map();
+    actorAtlases.set(sprite, sizes);
+  }
+  const found = sizes.get(size);
+  if (found) return found;
+  const layer = document.createElement("canvas");
+  layer.width = Math.ceil(size);
+  layer.height = Math.ceil(size + 16);
+  const brush = layer.getContext("2d")!;
+  brush.imageSmoothingEnabled = false;
+  brush.fillStyle = "#14202588";
+  brush.beginPath();
+  brush.ellipse(size / 2, size + 8, size * 0.45, 7, 0, 0, Math.PI * 2);
+  brush.fill();
+  brush.drawImage(sprite, 0, 0, size, size);
+  sizes.set(size, layer);
+  return layer;
+}
 function background(time: number): void {
   const sky = ctx.createLinearGradient(0, 0, 0, 675);
-  sky.addColorStop(0, "#101b2b");
+  sky.addColorStop(0, Math.sin(time / 90000) > 0 ? "#182a3c" : "#0b1224");
   sky.addColorStop(0.6, "#273142");
   sky.addColorStop(1, "#754333");
   ctx.fillStyle = sky;
@@ -257,7 +343,7 @@ function background(time: number): void {
   ctx.fillStyle = "#f7b653";
   ctx.globalAlpha = 0.6;
   ctx.beginPath();
-  ctx.arc(970, 145, 45, 0, Math.PI * 2);
+  ctx.arc(775, 245, 28, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
   for (let layer = 0; layer < 3; layer++) {
@@ -277,7 +363,7 @@ function background(time: number): void {
     ctx.fill();
   }
   ctx.fillStyle = "#263635";
-  ctx.fillRect(0, 492, 1200, 183);
+  ctx.fillRect(0, 455, 1200, 220);
   for (let i = 0; i < 80; i++) {
     ctx.fillStyle = i % 3 === 0 ? "#405044" : "#334740";
     const x = (i * 173) % 1200;
@@ -316,6 +402,16 @@ function keep(time: number): void {
   ctx.fillRect(595, 190, 40, 22);
   ctx.fillStyle = "#ffd27d";
   ctx.fillRect(602, 197, 21, 5);
+  for (const [i, mod] of (forge?.patches ?? forge?.mods ?? []).entries()) {
+    const x = 487 + (i % 10) * 24,
+      y = 276 + Math.floor(i / 10) * 38;
+    ctx.fillStyle = ["#ffbd62", "#9fe6bc", "#b5b8fa"][i % 3]!;
+    ctx.fillRect(x, y, 16, 27);
+    ctx.fillStyle = "#253342";
+    ctx.font = "bold 12px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(mod.title.slice(0, 1), x + 8, y + 18);
+  }
   for (const x of [502, 698]) {
     const radius = 48 + Math.sin(time / 140 + x) * 4;
     const glow = ctx.createRadialGradient(x, 303, 2, x, 303, radius);
@@ -331,8 +427,8 @@ function render(time: number): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, 1920, 1080);
   if (transparent) {
-    ctx.translate(0, 550);
-    ctx.scale(1.6, 0.75);
+    ctx.translate(420, 500);
+    ctx.scale(0.9, 0.9);
   } else ctx.scale(1.6, 1.6);
   ctx.imageSmoothingEnabled = false;
   ctx.save();
@@ -375,13 +471,16 @@ function render(time: number): void {
       current?.sprites[entity.kind],
       entity.viewer,
     );
-    const size =
-      entity.kind === "slime-king" ? 80 : entity.team === "hero" ? 42 : 38;
-    ctx.fillStyle = "#14202588";
-    ctx.beginPath();
-    ctx.ellipse(x, y + 8, size * 0.45, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.drawImage(sprite, x - size / 2, y - size, size, size);
+    const size = (entity.team === "hero" ? 42 : 38) * (entity.scale ?? 1);
+    ctx.drawImage(actorSprite(sprite, size), x - size / 2, y - size);
+    if (entity.hat && current?.sprites[entity.hat])
+      ctx.drawImage(
+        pixelSprite(entity.hat, current.sprites[entity.hat]),
+        x - 17,
+        y - size - 20,
+        34,
+        27,
+      );
     // Honest provenance stays visible even when collision avoidance hides a name.
     if (entity.simulated) {
       ctx.fillStyle = "#18202f";
@@ -392,14 +491,19 @@ function render(time: number): void {
       ctx.fillText("SIM", x, y + 12);
     }
     if (entity.viewer) {
-      ctx.font =
-        'bold 12px "Segoe UI", "Microsoft YaHei", "Yu Gothic", "Noto Sans", sans-serif';
       const viewerLabel = `${entity.simulated ? "SIM · " : ""}${entity.viewer}`;
+      let width = labelWidths.get(viewerLabel);
+      if (width === undefined) {
+        ctx.font = labelFont;
+        width = ctx.measureText(viewerLabel).width + 10;
+        if (labelWidths.size >= 1024) labelWidths.clear();
+        labelWidths.set(viewerLabel, width);
+      }
       labels.push({
         text: viewerLabel,
         x,
         y: y - size - 10,
-        width: ctx.measureText(viewerLabel).width + 10,
+        width,
         height: 18,
         priority:
           (credit.includes(entity.viewer) ? 1e9 : 0) +
@@ -442,6 +546,7 @@ function render(time: number): void {
     ctx.fillStyle = "#f9e8c6";
     ctx.fillText(label.text, label.x, label.y + 4);
   }
+  let renderedBanner = false;
   for (let i = effects.length - 1; i >= 0; i--) {
     const fx = effects[i];
     if (!fx) continue;
@@ -450,6 +555,7 @@ function render(time: number): void {
       effects.splice(i, 1);
       continue;
     }
+    drawVisualFx(ctx, fx, progress, time, sortedEntities);
     const x = Number(fx.x ?? 600),
       y = Number(fx.y ?? 337);
     if (fx.type === "telegraph") {
@@ -582,13 +688,29 @@ function render(time: number): void {
       ctx.fillRect(0, 0, 1200, 675);
       ctx.globalAlpha = 1;
     }
-    if (fx.type === "banner") {
+    if (
+      fx.type === "banner" &&
+      !renderedBanner &&
+      !["BUILDING", "LIVE"].includes(forge?.build?.stage ?? "") &&
+      forge?.round?.stage !== "STREAMER_APPROVAL"
+    ) {
+      renderedBanner = true;
       ctx.textAlign = "center";
-      ctx.font = "bold 25px monospace";
-      ctx.fillStyle = "#19242ddd";
-      ctx.fillRect(330, 105, 540, 42);
+      ctx.font = "bold 18px monospace";
+      ctx.fillStyle = "#19242df5";
+      ctx.fillRect(398, 125, 402, 60);
       ctx.fillStyle = "#ffca7c";
-      ctx.fillText(String(fx.text ?? ""), 600, 134, 510);
+      const words = String(fx.text ?? "").split(" ");
+      let row = "",
+        n = 0;
+      for (const word of words) {
+        if (ctx.measureText(row + " " + word).width > 376 && row) {
+          ctx.fillText(row, 600, 148 + n * 22);
+          row = word;
+          if (++n === 2) break;
+        } else row += (row ? " " : "") + word;
+      }
+      if (n < 2) ctx.fillText(row, 600, 148 + n * 22, 376);
     }
   }
   ctx.fillStyle = "#ffb667";
@@ -607,13 +729,14 @@ function render(time: number): void {
     ctx.fillRect(0, 0, 1200, 675);
   }
   ctx.restore();
+  ctx.setTransform(1.6, 0, 0, 1.6, 0, 0);
   ctx.textAlign = "left";
   ctx.fillStyle = "#101a25db";
   ctx.fillRect(24, 22, 245, 95);
   ctx.fillStyle = "#f2a750";
-  ctx.font = "bold 23px monospace";
+  ctx.font = "bold 28px monospace";
   ctx.fillText("FORGE KEEP", 38, 50);
-  ctx.font = "bold 13px monospace";
+  ctx.font = "bold 18px monospace";
   ctx.fillStyle = "#eadbc2";
   ctx.fillText(
     `WAVE ${current?.world.wave ?? 0}  •  KEEP ${Math.max(0, Math.round(current?.world.keepHp ?? 100))}%`,
@@ -625,9 +748,9 @@ function render(time: number): void {
   ctx.textAlign = "right";
   ctx.font = "12px monospace";
   ctx.fillStyle = "#e8d7b1";
-  ctx.fillText("J JOIN  ·  S SUB  ·  R RAID  ·  M MOD", 1175, 650);
+  if (dev) ctx.fillText("J JOIN  ·  S SUB  ·  R RAID  ·  M MOD", 1175, 650);
   requestAnimationFrame(render);
-  if (forge) drawForgeHud(ctx, forge, time - forgeReceived);
+  if (forge) drawForgeHud(ctx, forge, time - forgeReceived, hall);
 }
 connect();
 requestAnimationFrame(render);

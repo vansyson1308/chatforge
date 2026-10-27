@@ -1,9 +1,14 @@
-# Demo script
+# ChatForge — three-minute demo draft
 
-## Setup
+| Time      | Picture                                               | Narration / action                                                                                                                                                 |
+| --------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0:00–0:15 | Keep under siege; named heroes defending              | “What if chat could ship the game while you stream?”                                                                                                               |
+| 0:15–0:35 | Four viewer ideas entering the feed                   | Show real Twitch !idea and visible author credit. SIM footage must keep its SIM labels.                                                                            |
+| 0:35–0:55 | Three large cards and moving vote bars                | “The Producer turns ideas into buildable spectacles. Chat chooses.” Type !vote.                                                                                    |
+| 0:55–1:10 | Winner hits the anvil                                 | “Now Codex writes a real mod, inside a restricted workspace.”                                                                                                      |
+| 1:10–1:45 | Live Spec/Code/Test/Deploy ticker                     | Compress waiting with an explicit speed-up label. Show actual local test command and host report. Never fabricate a repair.                                        |
+| 1:45–2:20 | SHIPPED; sprite arrives, timed climax, community gear | Let the event play at real speed. Show credits and trigger the new chat command.                                                                                   |
+| 2:20–2:40 | Safe Mode / rollback demonstration                    | “Generated code only runs in QuickJS. Static checks, baseline validation and two deterministic simulations protect the live game.” Label any staged failure drill. |
+| 2:40–3:00 | Keep's patch flags + Hall of Patches + patch notes    | “Codex built ChatForge. And Codex is the engine inside it. Your community leaves its mark.”                                                                        |
 
-Planned for M6.
-
-## Three-minute story
-
-Planned for M6.
+Record at 1920×1080. Audio may be enabled explicitly with A. Hide development hints. Preserve Twitch/SIM provenance. Choose the final three real soak mods after inspecting their action footage; screenshots are evidence, not a substitute for video.

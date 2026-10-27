@@ -196,6 +196,10 @@ try {
       path: resolve("docs/media/m3-overlay.png"),
     });
   }
+  if (process.env.CHATFORGE_CAPTURE_M4 === "1") {
+    const { captureHudPreview } = await import("./capture-hud-preview.mjs");
+    await captureHudPreview(browser, base);
+  }
   assert.deepEqual(errors, []);
   console.log(
     "PASS: built dashboard + Forge WS, Normal start/stop, Safe Mode, patch notes, overlay snapshots/HUD, cross-site document allowance and strict API/mutations. No Twitch or AI requests.",

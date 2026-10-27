@@ -1,16 +1,49 @@
 import { chromium } from "playwright-core";
 /* global document, requestAnimationFrame */
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+import { spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+const data = await mkdtemp(join(tmpdir(), "chatforge-fps-")),
+  base = "http://localhost:3099";
+const server = spawn(process.execPath, ["dist/apps/server/src/main.js"], {
+  cwd: resolve("apps/server"),
+  env: {
+    ...process.env,
+    PORT: "3099",
+    NODE_ENV: "development",
+    CHAT_SOURCE: "simulator",
+    CHATFORGE_RUNTIME_DIR: data,
+  },
+  stdio: "ignore",
+  windowsHide: true,
+});
+let exited = false,
+  browser;
+server.once("exit", () => {
+  exited = true;
+});
 try {
+  for (let n = 0; n < 100; n++) {
+    if (exited) throw Error("Owned FPS server exited");
+    try {
+      if ((await fetch(base + "/api/forge")).ok) break;
+    } catch {
+      /* Wait for fixture server. */
+    }
+    await delay(100);
+  }
+  browser = await chromium.launch({ channel: "chrome", headless: true });
   const page = await browser.newPage({
     viewport: { width: 1920, height: 1080 },
     deviceScaleFactor: 1,
   });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("http://127.0.0.1:5173/?mode=full");
+  await page.goto(base + "/overlay/?mode=full");
   const response = await page.evaluate(async () => {
-    const res = await fetch("http://127.0.0.1:3000/dev/populate", {
+    const res = await fetch("/dev/populate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ count: 300 }),
@@ -22,6 +55,14 @@ try {
     () => Number(document.querySelector("#game")?.dataset.entities) >= 300,
   );
   await page.waitForTimeout(2000);
+  const profiler =
+    process.env.CHATFORGE_PROFILE === "1"
+      ? await page.context().newCDPSession(page)
+      : undefined;
+  if (profiler) {
+    await profiler.send("Profiler.enable");
+    await profiler.send("Profiler.start");
+  }
   const metrics = await page.evaluate(
     () =>
       new Promise((resolve) => {
@@ -53,10 +94,36 @@ try {
         requestAnimationFrame(frame);
       }),
   );
+  if (profiler) {
+    const { profile } = await profiler.send("Profiler.stop");
+    console.log(
+      "CPU_PROFILE " +
+        JSON.stringify(
+          profile.nodes
+            .filter((n) => n.hitCount)
+            .sort((a, b) => b.hitCount - a.hitCount)
+            .slice(0, 16)
+            .map((n) => ({
+              function: n.callFrame.functionName,
+              hits: n.hitCount,
+              line: n.callFrame.lineNumber,
+            })),
+        ),
+    );
+  }
   console.log("OVERLAY_FPS " + JSON.stringify(metrics));
   if (errors.length) throw Error(errors.join("\n"));
   if (metrics.minEntities < 300 || metrics.avgFps < 58 || metrics.p5Fps < 50)
     throw Error("Overlay FPS gate failed");
 } finally {
-  await browser.close();
+  await browser?.close();
+  if (!exited) {
+    server.kill();
+    for (let n = 0; n < 50 && !exited; n++) await delay(100);
+  }
+  if (!exited) {
+    console.error("Owned FPS server did not stop");
+    process.exitCode = 1;
+  }
+  await rm(data, { recursive: true, force: true });
 }
