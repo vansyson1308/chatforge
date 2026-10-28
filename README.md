@@ -4,7 +4,7 @@
 
 ![A community-built keep and its giant crab showcase](docs/media/hud/final-showcase.png)
 
-[Watch the demo (2:14)](YOUTUBE_URL_TBD) · [Architecture](docs/ARCHITECTURE.md) · [Devpost](docs/DEVPOST.md) · [Live evidence](docs/media/hud/README.md)
+[Watch the demo (2:14)](https://youtu.be/tCDQ9QM6JUE) · [Architecture](docs/ARCHITECTURE.md) · [Devpost](docs/DEVPOST.md) · [Live evidence](docs/media/hud/README.md)
 
 ## What it does
 
