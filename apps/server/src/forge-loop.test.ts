@@ -439,6 +439,10 @@ it.each(["HTTP 500", "TimeoutError"])(
       expect(JSON.stringify(f.frames)).not.toContain(
         "sensitive provider payload",
       );
+      const failedId = f.loop.round?.id;
+      await vi.advanceTimersByTimeAsync(9000);
+      expect(f.loop.round?.stage).toBe("COLLECTING");
+      expect(f.loop.round?.id).not.toBe(failedId);
     } finally {
       await f.cleanup();
     }

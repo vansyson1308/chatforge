@@ -31,7 +31,7 @@ export interface ProducerTransport {
 export const worldOnlyReason =
   "The forge only shapes the game world. Try a creature, spell or weather effect!";
 const forbiddenIdea =
-  /\b(?:delete\s+(?:(?:all|every|the|my|your)\s+)*(?:files?|folders?|system)|steal|dox\w*|password|api[ -]?key|openai\s*key|process\s*\.\s*env|loops?\s+forever|infinite\s+loop|credentials?|credit[ -]?card|advertis\w*|buy\s|spam|unrelated|slur[ _-]?placeholder|subscribe to|ignore (?:all|previous)|reveal secrets|system prompt|powershell|terminal|cmd\.exe|install|download|real.world|kill yourself)\b/iu;
+  /\b(?:delete\s+(?:(?:all|every|the|my|your)\s+)*(?:files?|folders?|system)|steal|dox\w*|password|api[ -]?keys?|openai\s*keys?|(?:print|show|reveal|leak|display|expose)\b[^.!?]{0,40}\b(?:keys?|tokens?|secrets?|env)|process\s*\.\s*env|loops?\s+forever|infinite\s+loop|credentials?|credit[ -]?card|advertis\w*|buy\s|spam|unrelated|slur[ _-]?placeholder|subscribe to|ignore (?:all|previous)|reveal secrets|system prompt|powershell|terminal|cmd\.exe|install|download|real.world|kill yourself)\b/iu;
 export function allowedIdea(text: string): boolean {
   const explicitSexual =
     /\b(?:porn(?:ography|ographic)?|explicit\s+sexual|sexual\s+(?:content|acts?|exploitation)|nude|nudity)\b/iu;
@@ -150,6 +150,7 @@ export class ForgeProducer implements Producer {
     ).length;
     let tokens = 0;
     let selections: z.infer<typeof producerCardsSchema>["cards"] | undefined;
+    let fallback: z.infer<typeof producerCardsSchema>["cards"] | undefined;
     for (let attempt = 0; attempt < 2; attempt++) {
       const response = await this.transport.cards(
         attempt
@@ -159,20 +160,21 @@ export class ForgeProducer implements Producer {
       );
       tokens += response.tokens;
       const candidate = producerCardsSchema.parse(response.value).cards;
+      fallback = candidate;
       const twitchCards = candidate.filter((card) =>
         card.groupIds.some((id) =>
           groups[id]?.some((idea) => idea.source === "twitch"),
         ),
       ).length;
-      if (twitchCards >= Math.min(3, twitchGroups)) {
+      // At least one real viewer group must reach the ballot when one is viable.
+      // Some real ideas can be safe yet unbuildable; never stall the round on them.
+      if (twitchCards >= Math.min(1, twitchGroups)) {
         selections = candidate;
         break;
       }
     }
-    if (!selections)
-      throw Error(
-        "Producer did not prioritize eligible Twitch ideas; no cards published",
-      );
+    selections ??= fallback;
+    if (!selections) throw Error("Producer returned no cards");
     const cards: ForgeCard[] = [];
     const claimed = new Set<number>();
     for (const selection of selections) {

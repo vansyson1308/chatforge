@@ -80,6 +80,7 @@ export class ForgeLoop {
   private curationAbort?: AbortController;
   private buildAbort?: AbortController;
   private finishedAt = 0;
+  private failedRoundAt?: number;
   private buildStartedAt = 0;
   private showcaseAt = 0;
   private activeBuildId?: number;
@@ -338,6 +339,18 @@ export class ForgeLoop {
       if (!this.building && this.options.autoCollect !== false) this.collect();
       return;
     }
+    // A round that failed before building (e.g. Producer outage) must not stall the
+    // stream: reopen collection after a short pause; pending ideas carry over.
+    if (round.stage === "FAILED" && !this.curating && !this.building) {
+      if (this.options.autoCollect === false) return;
+      this.failedRoundAt ??= this.now();
+      if (this.now() - this.failedRoundAt >= 8000) {
+        this.failedRoundAt = undefined;
+        this.collect();
+      }
+      return;
+    }
+    this.failedRoundAt = undefined;
     if (
       round.stage === "COLLECTING" &&
       this.now() >= round.deadline! &&
