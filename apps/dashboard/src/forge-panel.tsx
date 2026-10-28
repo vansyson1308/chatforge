@@ -10,7 +10,7 @@ function Round({ round, now }: { round: ForgeRound; now: number }) {
   return (
     <div className="forge-round">
       <h3>
-        Round {round.id}{" "}
+        Round {round.number ?? round.id}{" "}
         <span className="tag">{round.stage.replaceAll("_", " ")}</span>
       </h3>
       {round.deadline !== null ? (
