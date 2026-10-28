@@ -1,21 +1,15 @@
-# HUD evidence
+# Final product pass HUD evidence
 
-Captured at 1920×1080 with installed Chrome. The `m5-*` images are actual frames from the SIM-only Producer/Codex soak; they show the build that ran during that test. A later client-only correction prevents long season/round labels and the build headline from overlapping. The `layout-preview-*` images are regenerated from that corrected client.
+These 1920 × 1080 frames are captured from the actual localhost stream with Twitch connected, Crowd Sim enabled and real Codex builds. They are not staged layout replays. The feed contains only ideas admitted by the moderation pipeline; the screenshots do not prove moderation can detect every possible unsafe message.
 
-Real soak phases: [collecting](m5-collecting.png), [curating](m5-curating.png), [voting](m5-voting.png), [approval](m5-streamer_approval.png), [building](m5-building.png), [testing](m5-testing.png), [deploying](m5-deploying.png), [live](m5-live.png). Soak outcomes are in [the report](../soak/report.json).
+- [Moderated feed](final-feed.png)
+- [Voting](final-voting.png)
+- [Live code and sprite preview](final-build-code-sprite.png)
+- [Gatekeeper checks](final-gatekeeper.png)
+- [Shipped](final-shipped.png)
+- [Showcase](final-showcase.png)
+- [Next round](final-next-round.png)
 
-The [failure frame](m5-failed.png) shows the intentionally stopped voting round used to make a safe restart window; it is not a spontaneous failed build.
+The [live report](final-live-report.json) records build results and which outbound Twitch announcements were confirmed sent. The code panel deliberately redacts untrusted free text and unknown identifiers; it is not a verbatim source viewer. In the pictured showcase, the action produced visible effects while the mod also displayed its own recharge message. Gatekeeper checks for an immediate visible response, but cannot guarantee that every generated mod's response matches its intended gameplay semantics.
 
-The [late-stream screenshot](m5-late-stream-10-patches.png) was captured during the real SIM-only soak after the tenth generated mod went LIVE; the HUD in this frame precedes the client-only text-fit correction described above.
-
-Layout replays are explicitly labelled in the image. They reuse prior real cards and run a saved real mod in QuickJS, but their stages and votes are fixtures. The [twelve-emblem layout](layout-preview-twelve-emblems.png) duplicates saved card metadata with unique preview IDs to test the late-stream layout; it is not evidence of twelve real shipped mods. Other replays: [collecting](layout-preview-collecting.png), [voting](layout-preview-voting.png), [approval](layout-preview-streamer_approval.png), [building](layout-preview-building.png), [testing](layout-preview-testing.png), [live](layout-preview-live.png), [Hall](layout-preview-hall.png), [transparent overlay](layout-preview-transparent.png).
-
-To reproduce the replay after `pnpm build` in PowerShell:
-
-```powershell
-$env:CHATFORGE_CAPTURE_M4='1'
-node scripts/verify-forge-handoff.mjs
-Remove-Item Env:CHATFORGE_CAPTURE_M4
-```
-
-The browser check owns and cleans its server, Chrome instance and temporary database. It does not connect Twitch or call AI.
+Earlier M5 screenshots and layout replays were removed as superseded; the [soak report](../soak/report.json) remains available for the prior verification.

@@ -1,0 +1,81 @@
+{
+  "realTwitch": true,
+  "source": "Twitch plus normal Crowd Sim",
+  "live": [
+    {
+      "id": 15,
+      "title": "Crabsolutely Massive",
+      "attempts": 1,
+      "durationMs": 39193
+    },
+    {
+      "id": 16,
+      "title": "Pumpkin Panic Parade",
+      "attempts": 1,
+      "durationMs": 40330
+    },
+    {
+      "id": 17,
+      "title": "Petal to the Heal",
+      "attempts": 1,
+      "durationMs": 44831
+    }
+  ],
+  "intentionallyCancelledFourthBuild": true,
+  "captured": [
+    "feed",
+    "voting",
+    "build-code-sprite",
+    "gatekeeper",
+    "shipped",
+    "showcase",
+    "next-round"
+  ],
+  "outboundSent": {
+    "open": true,
+    "voting": true,
+    "winner": true,
+    "shipped": true,
+    "showcase": true,
+    "failed": true
+  },
+  "outboundSentTimes": [
+    1793146051136,
+    1793146114933,
+    1793146116532,
+    1793146118210,
+    1793146120179,
+    1793146121591,
+    1793146145561,
+    1793146194603,
+    1793146198590,
+    1793146209016,
+    1793146274704,
+    1793146276504,
+    1793146277905,
+    1793146279524,
+    1793146281487,
+    1793146304897,
+    1793146355447,
+    1793146359473,
+    1793146369649,
+    1793146442757,
+    1793146444400,
+    1793146445991,
+    1793146447612,
+    1793146473140,
+    1793146528184,
+    1793146532539,
+    1793146542697,
+    1793146562066,
+    1793146563331,
+    1793146564951,
+    1793146566915,
+    1793146568189,
+    1793146569833,
+    1793146571472
+  ],
+  "failures": [
+    18
+  ]
+}
