@@ -51,3 +51,32 @@ it("fails closed on unavailable moderation and sanitizes display names", async (
   expect(safeDisplayName("slur_placeholder")).toBe("viewer");
   expect(safeDisplayName("MưaNhỏ")).toBe("MưaNhỏ");
 });
+it("also requires moderation before command arguments reach mods", async () => {
+  const feed = new FeedModeration(async (texts) =>
+    texts.map((text) => text.includes("flagged")),
+  );
+  try {
+    expect(await feed.approveText("spam spam")).toBe(false);
+    expect(await feed.approveText("flagged content")).toBe(false);
+    expect(await feed.approveText("gold sparkles")).toBe(true);
+  } finally {
+    feed.close();
+  }
+});
+it("clears the approved feed when a later command moderation request fails", async () => {
+  let fail = false;
+  const feed = new FeedModeration(async (texts) => {
+    if (fail) throw Error("unavailable");
+    return texts.map(() => false);
+  });
+  try {
+    feed.add(idea(1, "A friendly dragon"));
+    await feed.flush();
+    expect(feed.items()).toHaveLength(1);
+    fail = true;
+    expect(await feed.approveText("a different command argument")).toBe(false);
+    expect(feed.items()).toEqual([]);
+  } finally {
+    feed.close();
+  }
+});

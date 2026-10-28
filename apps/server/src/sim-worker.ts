@@ -129,16 +129,13 @@ port.on(
             result = host.exportCheckpoint();
             break;
           case "celebrate":
-            world.state.fx.push(
-              { type: "banner", text: String(message.text).slice(0, 120) },
-              {
-                type: "particles",
-                x: 600,
-                y: 160,
-                color: "#ffd66b",
-                count: 80,
-              },
-            );
+            world.state.fx.push({
+              type: "particles",
+              x: 600,
+              y: 160,
+              color: "#ffd66b",
+              count: 80,
+            });
             break;
           case "showcase":
             host.showcase(

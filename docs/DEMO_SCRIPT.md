@@ -12,3 +12,5 @@
 | 2:40–3:00 | Keep's patch flags + Hall of Patches + patch notes    | “Codex built ChatForge. And Codex is the engine inside it. Your community leaves its mark.”                                                                        |
 
 Record at 1920×1080. Audio may be enabled explicitly with A. Hide development hints. Preserve Twitch/SIM provenance. Choose the final three real soak mods after inspecting their action footage; screenshots are evidence, not a substitute for video.
+
+For a repeatable take, stop the server and run `pnpm demo:reset`, then `pnpm stream`. The dashboard's Demo Director can skip the current countdown, select the winning card, replay the last active showcase and fire SIM-labelled events; it never substitutes a fake build. Use `/overlay/?mode=overlay&clean=1` to hide the sound chip. SHOWCASE runs for `SHOWCASE_MS` (14 seconds by default): the first four seconds show the title and credits, followed by the mod's declared command or event. The next collection begins afterwards. The on-stream idea feed remains blank when moderation is unavailable.

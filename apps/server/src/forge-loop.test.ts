@@ -17,6 +17,15 @@ import { testCards } from "./forge-fixtures.js";
 import { goodMod } from "./forge-fixtures.js";
 
 afterEach(() => vi.useRealTimers());
+it("does not serialize unapproved inbox ideas into overlay state", async () => {
+  const f = await fixture();
+  try {
+    expect(f.inbox.ideas.length).toBeGreaterThan(0);
+    expect(f.loop.view().ideas).toEqual([]);
+  } finally {
+    await f.cleanup();
+  }
+});
 it("never invokes or retries Codex for a host baseline fault", async () => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
   const build = vi.fn(async () => ({ source: goodMod, tokens: 0 })),
@@ -182,7 +191,8 @@ async function fixture(
   );
   host.markBaseline();
   const frames: ForgeView[] = [],
-    announcements: string[] = [];
+    announcements: string[] = [],
+    showcases: string[] = [];
   const router = new ChatRouter(inbox, {
     join: (chat) => {
       host.world.joinViewer(chat.displayName, `simulator:${chat.userId}`, true);
@@ -221,7 +231,10 @@ async function fixture(
         announcements.push(text);
         await onCelebrate();
       },
-      showcase: async (id, command, event) => host.showcase(id, command, event),
+      showcase: async (id, command, event) => {
+        showcases.push(command ?? event ?? "");
+        host.showcase(id, command, event);
+      },
     },
     gate: (input, _signal, onCheck) => gatekeeper(input, onCheck),
     broadcast: (view) => frames.push(structuredClone(view)),
@@ -242,6 +255,7 @@ async function fixture(
     host,
     frames,
     announcements,
+    showcases,
     cleanup: async () => {
       await loop.close();
       host.dispose();
@@ -314,6 +328,54 @@ async function finishShowcase(loop: ForgeLoop) {
   expect(loop.build?.stage).toBe("LIVE");
   expect(loop.round?.stage).toBe("COLLECTING");
 }
+it("showcases once at four seconds before beginning the next round", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  const f = await fixture();
+  try {
+    await voting(f.loop);
+    await vi.advanceTimersByTimeAsync(40000);
+    await f.loop.settled();
+    expect(f.loop.build?.stage).toBe("SHOWCASE");
+    expect(f.loop.round).toBeNull();
+    await vi.advanceTimersByTimeAsync(3750);
+    expect(f.showcases).toEqual([]);
+    await vi.advanceTimersByTimeAsync(250);
+    await f.loop.settled();
+    expect(f.showcases).toEqual(["!spark"]);
+    expect(
+      f.announcements.some(
+        (message) =>
+          message.includes("!spark") && message.includes("try it yourself"),
+      ),
+    ).toBe(true);
+    await vi.advanceTimersByTimeAsync(10250);
+    expect(f.showcases).toHaveLength(1);
+    expect(f.loop.round?.stage).toBe("COLLECTING");
+  } finally {
+    await f.cleanup();
+  }
+});
+it("director skips timers and forces a real builder selection without simulating a build", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  const build = vi.fn(async () => ({ source: goodMod, tokens: 0 }));
+  const f = await fixture({ build });
+  try {
+    f.loop.start("demo");
+    f.loop.skipCountdown();
+    await f.loop.settled();
+    expect(f.loop.round?.stage).toBe("VOTING");
+    f.loop.forceWinner(2);
+    f.loop.skipCountdown();
+    expect(f.loop.round?.winner).toBe(1);
+    f.loop.skipCountdown();
+    await f.loop.settled();
+    expect(build).toHaveBeenCalledOnce();
+    expect(f.loop.build?.winner).toBe(1);
+    expect(f.loop.build?.stage).toBe("SHOWCASE");
+  } finally {
+    await f.cleanup();
+  }
+});
 it("Crowd Sim full round reaches LIVE, persists transitions and last-vote-wins", async () => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
   const f = await fixture();

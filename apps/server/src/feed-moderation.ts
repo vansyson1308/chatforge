@@ -88,13 +88,18 @@ export class FeedModeration {
         [text],
         AbortSignal.any([this.controller.signal, AbortSignal.timeout(10000)]),
       );
-      if (flags.length !== 1 || typeof flags[0] !== "boolean" || this.stopped)
+      if (flags.length !== 1 || typeof flags[0] !== "boolean" || this.stopped) {
+        this.visible = [];
+        if (!this.stopped) this.changed();
         return false;
+      }
       this.cache.set(text, flags[0]);
       while (this.cache.size > 500)
         this.cache.delete(this.cache.keys().next().value!);
       return !flags[0];
     } catch {
+      this.visible = [];
+      if (!this.stopped) this.changed();
       return false;
     }
   }
