@@ -9,6 +9,8 @@ import { ModHost } from "./mod-host.js";
 import { ForgeLoop } from "./forge-loop.js";
 import { gatekeeper } from "./gatekeeper.js";
 import { goodMod, testCards } from "./forge-fixtures.js";
+import { ForgeProducer } from "./producer.js";
+import { moderationCorpus } from "./moderation-corpus.js";
 
 afterEach(() => vi.useRealTimers());
 it("fake EventSub chat reaches LIVE, then failed repair preserves the game and a real runtime fault broadcasts rollback", async () => {
@@ -57,18 +59,33 @@ it("fake EventSub chat reaches LIVE, then failed repair preserves the game and a
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
   let calls = 0;
   const loop = new ForgeLoop(inbox, {
-    producer: {
-      curate: async (ideas) => {
-        const cards = structuredClone(testCards);
-        cards[0]!.ideaIds = ideas.map((i) => i.id);
-        cards[0]!.credits = ideas.map((i) => ({
-          id: i.userId,
-          name: i.author,
-          source: i.source,
-        }));
-        return { cards, rejected: [], tokens: 0 };
+    producer: new ForgeProducer({
+      moderate: async (texts) => texts.map(() => false),
+      cards: async (input) => {
+        const { groups } = JSON.parse(input) as {
+          groups: { id: number; credits: { source: string }[] }[];
+        };
+        const real = groups.find((group) =>
+          group.credits.some((credit) => credit.source === "twitch"),
+        );
+        return {
+          value: {
+            cards: testCards.map((card, index) => ({
+              ...card,
+              ...(calls > 0
+                ? {
+                    title: `Dragon ${index + 1}`,
+                    pitch: "A mighty blue ally circles the keep",
+                    commands: ["!dragon"],
+                  }
+                : {}),
+              groupIds: index === 0 && real ? [real.id] : [],
+            })),
+          },
+          tokens: 0,
+        };
       },
-    },
+    }),
     builder: {
       build: async () => ({
         source:
@@ -140,11 +157,17 @@ it("fake EventSub chat reaches LIVE, then failed repair preserves the game and a
       timeout: 15000,
     });
     loop.start("demo");
-    await send("ada", "!idea summon a rubber duck");
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(loop.round?.stage).toBe("COLLECTING");
+    await send("ada", `!idea ${moderationCorpus[0].text}`);
     expect(inbox.pending()).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(45500);
+    await vi.advanceTimersByTimeAsync(25500);
     await loop.settled();
     expect(loop.round?.stage).toBe("VOTING");
+    expect(loop.round?.cards[0]?.ideaIds).toContain(inbox.ideas[0]?.id);
+    expect(loop.round?.cards[0]?.credits).toEqual([
+      { id: "ada", name: "ada", source: "twitch" },
+    ]);
     await send("bob", "!vote 1");
     expect(loop.round?.tallies[0]).toBe(1);
     socket!.terminate();

@@ -18,7 +18,7 @@ We had to keep untrusted chat and generated code away from host execution, prese
 
 ## Accomplishments we're proud of
 
-A 45-minute SIM-only soak shipped 21 of 21 real builds. A separate Twitch plus SIM run shipped three of three on their first attempt, with a 40.3-second median build time, and confirmed the outbound announcements. A later Twitch recording captured real chat and two more showcases. The latest local suite passed 190 tests. These are measured runs, not claims that every generated mod will pass.
+A 45-minute SIM-only soak shipped 21 of 21 real builds. A separate Twitch plus SIM run shipped three of three on their first attempt, with a 40.3-second median build time, and confirmed the outbound announcements. A later Twitch recording captured real chat and two more showcases. The latest local suite passed 244 tests; a live moderation regression check matched all 26 expected decisions. These are measured runs, not claims that every generated mod will pass.
 
 ## What we learned
 

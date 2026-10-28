@@ -5,7 +5,7 @@ import type {
   GateReport,
 } from "../../../packages/shared/src/forge.js";
 import { formatCredits } from "../../../packages/shared/src/forge.js";
-import type { Chat } from "../../../packages/shared/src/chat.js";
+import type { Chat, Idea } from "../../../packages/shared/src/chat.js";
 import type { HostCheckpoint } from "./mod-host.js";
 import type { GateInput } from "./gatekeeper.js";
 import { inspectMod } from "./gatekeeper.js";
@@ -36,7 +36,7 @@ export interface ForgeOptions {
     onCheck?: (check: GateReport["checks"][number]) => void,
   ): Promise<GateReport>;
   broadcast(view: ForgeView): void;
-  announce(text: string): void;
+  announce(text: string, eventKey?: string): void;
   resetRound(): void;
   now?: () => number;
   buildTimeoutMs?: number;
@@ -88,6 +88,8 @@ export class ForgeLoop {
   private showcasePending = false;
   private previousBuild = true;
   private forcedWinner?: number;
+  private lastOpenRound?: number;
+  private acknowledgedIdeas = new Set<number>();
   private tasks = new Set<Promise<void>>();
   private now: () => number;
   constructor(
@@ -229,6 +231,7 @@ export class ForgeLoop {
     this.publish();
   };
   start(preset: "demo" | "normal"): void {
+    if (this.running) return;
     this.preset = preset;
     this.running = true;
     this.inbox.setSetting("safe-mode", "false");
@@ -249,6 +252,7 @@ export class ForgeLoop {
   }
   private collect(): void {
     this.forcedWinner = undefined;
+    this.acknowledgedIdeas.clear();
     this.round = this.store.createRound(this.now());
     this.options.resetRound();
     this.stage(
@@ -256,8 +260,28 @@ export class ForgeLoop {
       "COLLECTING",
       this.now() + presets[this.preset].collect,
     );
+    if (this.lastOpenRound !== this.round.id) {
+      this.lastOpenRound = this.round.id;
+      this.options.announce(
+        "Forge open! !idea <a creature, spell or game twist>",
+        `round:${this.round.id}:open`,
+      );
+    }
+  }
+  acknowledgeIdea(idea: Idea, roundId: number | undefined): void {
+    if (
+      idea.source !== "twitch" ||
+      !this.running ||
+      !this.round ||
+      this.round.id !== roundId ||
+      !["COLLECTING", "CURATING"].includes(this.round.stage) ||
+      this.acknowledgedIdeas.has(idea.id)
+    )
+      return;
+    this.acknowledgedIdeas.add(idea.id);
     this.options.announce(
-      "Forge open! !idea <a creature, spell or game twist>",
+      `${formatCredits([{ name: idea.author, source: "twitch" }])} your idea is in the forge!`,
+      `round:${this.round.id}:idea:${idea.id}`,
     );
   }
   pulse(): void {
@@ -357,22 +381,34 @@ export class ForgeLoop {
     this.curating = true;
     this.curationAbort = new AbortController();
     this.stage(round, "CURATING");
-    const ideas = this.inbox.pending();
-    round.ideaIds = ideas.map((i) => i.id);
+    let ideas = this.inbox.pending();
     try {
-      const result = await this.options.producer.curate(
-        ideas,
-        [
-          ...Object.keys(
-            (await this.options.simulation.checkpoint()).world.mods,
-          ),
-          ...this.store.summaries(),
-        ],
-        AbortSignal.any([
-          this.curationAbort.signal,
-          AbortSignal.timeout(90000),
-        ]),
-      );
+      const live = [
+        ...Object.keys((await this.options.simulation.checkpoint()).world.mods),
+        ...this.store.summaries(),
+      ];
+      const signal = AbortSignal.any([
+        this.curationAbort.signal,
+        AbortSignal.timeout(90000),
+      ]);
+      let result;
+      for (let attempt = 0; ; attempt++) {
+        round.ideaIds = ideas.map((idea) => idea.id);
+        result = await this.options.producer.curate(ideas, live, signal);
+        this.store.addTokens(result.tokens);
+        signal.throwIfAborted();
+        const next = this.inbox.pending();
+        const seen = new Set(ideas.map((idea) => idea.id));
+        if (
+          !next.some((idea) => idea.source === "twitch" && !seen.has(idea.id))
+        )
+          break;
+        if (attempt >= 2)
+          throw Error(
+            "New Twitch ideas arrived repeatedly during curation; retry the round",
+          );
+        ideas = next;
+      }
       this.curationAbort.signal.throwIfAborted();
       for (const idea of ideas) {
         this.inbox.mark(
@@ -394,9 +430,17 @@ export class ForgeLoop {
         )
       )
         this.options.announce(worldOnlyReason);
-      this.store.addTokens(result.tokens);
       round.cards = result.cards;
       this.stage(round, "VOTING", this.now() + presets[this.preset].vote);
+      for (const [index, card] of round.cards.entries()) {
+        for (const credit of card.credits.filter(
+          (entry) => entry.source === "twitch",
+        ))
+          this.options.announce(
+            `${formatCredits([credit])} your idea is card ${index + 1} — !vote ${index + 1}`,
+            `round:${round.id}:card:${index}:viewer:${credit.id ?? credit.name}`,
+          );
+      }
       for (const [i, card] of round.cards.entries())
         this.options.announce(
           `${i + 1}. ${card.title}: ${card.pitch}${card.suggestion ? " [Forge suggestion]" : ""}`,

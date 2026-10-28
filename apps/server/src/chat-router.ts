@@ -204,6 +204,7 @@ export class ChatRouter {
   private cooldowns = new Map<string, number>();
   private duplicates = new Set<string>();
   private count = 0;
+  private realCount = 0;
   readonly votes = new Map<
     string,
     { userId: string; choice: number; source: Source }
@@ -216,6 +217,7 @@ export class ChatRouter {
   /** M3 calls this at round start; M2 has one collection round per process. */
   resetRound(): void {
     this.count = 0;
+    this.realCount = 0;
     this.duplicates.clear();
     this.votes.clear();
   }
@@ -247,11 +249,13 @@ export class ChatRouter {
       const key = `${chat.source}:${chat.userId}:${text.toLocaleLowerCase("en-US")}`;
       if (this.duplicates.has(key) || this.inbox.hasPending(chat, text))
         return "idea ignored: duplicate";
-      if (this.count >= 200) return "idea rejected: round full";
+      if ((chat.source === "twitch" ? this.realCount : this.count) >= 200)
+        return "idea rejected: round full";
       if (!this.allowed(chat, "idea", 10000)) return "idea ignored: cooldown";
       this.inbox.add(chat, text, this.now());
       this.duplicates.add(key);
       this.count++;
+      if (chat.source === "twitch") this.realCount++;
       return "idea queued";
     }
     if (name === "!vote") {

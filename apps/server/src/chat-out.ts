@@ -6,6 +6,7 @@ import { TwitchError } from "./twitch-auth.js";
 export class ChatOut {
   private queue: string[] = [];
   private seen = new Map<string, number>();
+  private eventKeys = new Set<string>();
   private next = 0;
   private busy = false;
   status = "idle";
@@ -14,15 +15,23 @@ export class ChatOut {
     private now = Date.now,
     private delivered: (message: string, status: string) => void = () => {},
   ) {}
-  enqueue(text: string, source: Source): boolean {
+  enqueue(text: string, source: Source, eventKey?: string): boolean {
     if (source !== "twitch") return false;
     // ASCII escape preserves U+2692 through editors/shells with legacy code pages.
     const message = `\u2692 ${sanitize(text, 498)}`;
     const now = this.now();
     for (const [key, expiry] of this.seen)
       if (expiry <= now) this.seen.delete(key);
-    if (this.seen.has(message) || this.queue.length >= 20) return false;
-    this.seen.set(message, now + 60000);
+    if (
+      (eventKey ? this.eventKeys.has(eventKey) : this.seen.has(message)) ||
+      this.queue.length >= 20
+    )
+      return false;
+    if (eventKey) {
+      this.eventKeys.add(eventKey);
+      while (this.eventKeys.size > 500)
+        this.eventKeys.delete(this.eventKeys.values().next().value!);
+    } else this.seen.set(message, now + 60000);
     this.queue.push(message);
     this.status = `queued (${this.queue.length})`;
     return true;

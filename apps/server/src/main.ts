@@ -135,7 +135,14 @@ const forgeStore = new ForgeStore(audience.inbox.db);
 const checkpoint = () =>
   sendCommand({ type: "checkpoint" }) as Promise<HostCheckpoint>;
 const feed = openAIFeedModeration(process.env, () => forge.publish());
-audience.inbox.onAdded = (idea) => feed.add(idea);
+audience.inbox.onAdded = (idea) => {
+  feed.add(idea);
+  const roundId = forge.round?.id;
+  if (idea.source === "twitch")
+    void feed.approveText(idea.text).then((approved) => {
+      if (approved && !stopping) forge.acknowledgeIdea(idea, roundId);
+    });
+};
 audience.approveCommandArgs = (text) => feed.approveText(text);
 const forge = new ForgeLoop(audience.inbox, {
   feed: () => feed.items(),
@@ -188,7 +195,7 @@ const forge = new ForgeLoop(audience.inbox, {
       )
         client.send(data);
   },
-  announce: (text) => audience.announce(text),
+  announce: (text, eventKey) => audience.announce(text, eventKey),
   resetRound: () => audience.router.resetRound(),
   buildTimeoutMs: Number(process.env.BUILD_TIMEOUT_MS ?? 240000),
   buildCap: Number(process.env.BUILDS_PER_HOUR ?? 12),

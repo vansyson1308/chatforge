@@ -221,9 +221,9 @@ export class Audience {
       )
     );
   }
-  announce(text: string): void {
+  announce(text: string, eventKey?: string): void {
     if (this.config.sources.includes("twitch") && this.auth.ready)
-      this.out.enqueue(text, "twitch");
+      this.out.enqueue(text, "twitch", eventKey);
     else this.record("SIM", `Local forge: ${text}`);
   }
   async directorEvent(type: string): Promise<void> {

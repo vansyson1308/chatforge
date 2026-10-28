@@ -27,6 +27,42 @@ const chat: Chat = {
   emoteOnly: false,
 };
 describe("chat input boundary", () => {
+  it("reserves real-viewer admission when SIM has filled the round cap", () => {
+    const inbox = new IdeaInbox(":memory:");
+    const router = new ChatRouter(inbox, {
+      join: vi.fn(),
+      command: vi.fn(),
+      reply: vi.fn(),
+    });
+    try {
+      for (let i = 0; i < 200; i++)
+        expect(
+          router.route({
+            ...chat,
+            source: "simulator",
+            userId: String(i),
+            text: `!idea sim concept ${i}`,
+          }),
+        ).toBe("idea queued");
+      expect(
+        router.route({
+          ...chat,
+          source: "simulator",
+          userId: "extra",
+          text: "!idea extra",
+        }),
+      ).toContain("round full");
+      expect(
+        router.route({
+          ...chat,
+          text: "!idea golden dragon breathes fire on enemies",
+        }),
+      ).toBe("idea queued");
+      expect(inbox.pending()[0]?.source).toBe("twitch");
+    } finally {
+      inbox.close();
+    }
+  });
   it("includes a newer Twitch idea even when 200 SIM ideas are pending", () => {
     const inbox = new IdeaInbox(":memory:");
     try {
@@ -208,6 +244,31 @@ describe("chat input boundary", () => {
   });
 });
 describe("Crowd Sim and outbound isolation", () => {
+  it("deduplicates a round event beyond the text TTL while allowing the next round and preserving pacing", async () => {
+    let now = 0;
+    const send = vi.fn().mockResolvedValue({ data: [{ is_sent: true }] });
+    const out = new ChatOut(send, () => now);
+    expect(out.enqueue("Forge open!", "twitch", "round:1:open")).toBe(true);
+    await out.tick();
+    now = 61000;
+    expect(out.enqueue("Forge open!", "twitch", "round:1:open")).toBe(false);
+    expect(out.enqueue("Forge open!", "twitch", "round:2:open")).toBe(true);
+    expect(
+      out.enqueue("your idea is in the forge!", "twitch", "round:2:idea:5"),
+    ).toBe(true);
+    expect(
+      out.enqueue("your idea is in the forge!", "twitch", "round:2:idea:5"),
+    ).toBe(false);
+    expect(out.enqueue("SIM feedback", "simulator", "round:2:idea:6")).toBe(
+      false,
+    );
+    await out.tick();
+    await out.tick();
+    expect(send).toHaveBeenCalledTimes(2);
+    now += 1600;
+    await out.tick();
+    expect(send).toHaveBeenCalledTimes(3);
+  });
   it("generates reproducible diverse fixtures with explicit source", () => {
     expect(ideas).toHaveLength(80);
     expect(badIdeas).toHaveLength(10);

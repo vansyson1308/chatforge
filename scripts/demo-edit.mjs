@@ -11,22 +11,28 @@ import { parseEnv } from "node:util";
 import { spawn } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { captureEvidence } from "./capture-demo-evidence.mjs";
+import {
+  parseEditArgs,
+  titleBand,
+  moderationScene,
+  moderationChatFilter,
+} from "./demo-edit-options.mjs";
 
-const name = process.argv[2];
-if (!name) throw Error("Usage: pnpm demo:edit <take directory>");
+const args = parseEditArgs(process.argv.slice(2));
 const root = resolve("runtime/recordings"),
-  take = resolve(
+  resolvedRoot = await realpath(root);
+async function resolveTake(name) {
+  const path = resolve(
     name.includes("/") || name.includes("\\") ? name : join(root, name),
   );
-if (!relative(root, take) || relative(root, take).startsWith(".."))
-  throw Error("Take must be inside runtime/recordings");
-const resolvedRoot = await realpath(root),
-  resolvedTake = await realpath(take);
-if (
-  !relative(resolvedRoot, resolvedTake) ||
-  relative(resolvedRoot, resolvedTake).startsWith("..")
-)
-  throw Error("Take resolves outside runtime/recordings");
+  const real = await realpath(path),
+    rel = relative(resolvedRoot, real);
+  if (!rel || rel.startsWith("..") || resolve(resolvedRoot, rel) !== real)
+    throw Error("Take resolves outside runtime/recordings");
+  return real;
+}
+const take = await resolveTake(args.take),
+  resolvedTake = take;
 const timeline = JSON.parse(
   await readFile(join(take, "timeline.json"), "utf8"),
 );
@@ -48,12 +54,21 @@ const stages = timeline.stages,
 const has = (stage) => Number.isFinite(first(stage));
 const sim = timeline.source === "SIM ONLY DRY TAKE";
 let highlights = {};
+const moderationTake = args.moderationFrom
+  ? await resolveTake(args.moderationFrom)
+  : take;
+let moderationDuration = timeline.durationMs / 1000;
 try {
   highlights = JSON.parse(
-    await readFile(join(take, "highlights.json"), "utf8"),
+    await readFile(join(moderationTake, "highlights.json"), "utf8"),
   );
+  if (args.moderationFrom)
+    moderationDuration =
+      JSON.parse(await readFile(join(moderationTake, "timeline.json"), "utf8"))
+        .durationMs / 1000;
 } catch {
-  /* Optional reviewed annotations. */
+  if (args.moderationFrom)
+    throw Error("Moderation take requires highlights.json and timeline.json");
 }
 await captureEvidence(take, timeline);
 if (
@@ -160,20 +175,13 @@ const scenes = [
 ];
 if (
   !sim &&
-  Number.isFinite(highlights.moderationAtSeconds) &&
-  highlights.moderationAtSeconds >= 0 &&
-  highlights.moderationAtSeconds < duration
-)
-  scenes.splice(3, 0, {
-    stage: "moderation",
-    kind: "chat",
-    start: highlights.moderationAtSeconds,
-    length: 8,
-    speed: 1,
-    title: "Rejected at the next curation",
-    narration:
-      "The unsafe request was rejected at the next curation. It never entered the broadcast idea feed.",
-  });
+  (args.moderationFrom || Number.isFinite(highlights.moderationAtSeconds))
+) {
+  const scene = moderationScene(highlights, moderationDuration, moderationTake);
+  if (moderationTake !== take)
+    scene.title = "Moderation — earlier real Twitch take";
+  scenes.splice(3, 0, scene);
+}
 const relativeFile = (path) =>
   relative(process.cwd(), path).replaceAll("\\", "/").replaceAll(":", "\\:");
 const text = async (file, value) => {
@@ -243,7 +251,9 @@ const font = "C\\:/Windows/Fonts/arial.ttf";
 try {
   for (let i = 0; i < scenes.length; i++) {
     const s = scenes[i],
-      start = safe(s.start, s.length, s.speed),
+      start = s.sourceTake
+        ? Math.max(0, Math.min(s.start, s.sourceDuration - s.length - 1))
+        : safe(s.start, s.length, s.speed),
       clip = s.length * s.speed;
     const graph = [],
       inputs = ["-y", "-filter_complex_threads", "2"];
@@ -278,12 +288,12 @@ try {
         "-ss",
         String(start),
         "-i",
-        join(take, "chat.webm"),
+        join(s.sourceTake ?? take, "chat.webm"),
         "-i",
         join(take, `narration-${i}.mp3`),
       );
       graph.push(
-        `[0:v]trim=duration=${clip},setpts=PTS-STARTPTS,crop=1200:650:0:0,scale=1600:867,pad=1920:875:160:0:color=0x101e2d,drawbox=x=175:y=377:w=1400:h=38:color=orange@0.85:t=3,drawbox=x=175:y=617:w=1400:h=38:color=orange@0.85:t=3[base]`,
+        `[0:v]trim=duration=${clip},setpts=PTS-STARTPTS,${moderationChatFilter(s.highlights)}[base]`,
       );
     } else {
       inputs.push(
@@ -316,7 +326,7 @@ try {
     if (s.speed > 1)
       f += `,drawtext=fontfile='${font}':textfile='${relativeFile(join(take, "speed.txt"))}':fontcolor=white:fontsize=27:x=35:y=35:box=1:boxcolor=black@0.8:boxborderw=8`;
     if (s.title)
-      f += `,drawtext=fontfile='${font}':textfile='${relativeFile(join(take, `title-${i}.txt`))}':fontcolor=0xffbb66:fontsize=37:x=(w-text_w)/2:y=35:box=1:boxcolor=black@0.8:boxborderw=8`;
+      f += titleBand(font, relativeFile(join(take, `title-${i}.txt`)));
     if (
       sim &&
       s.stage !== "architecture" &&

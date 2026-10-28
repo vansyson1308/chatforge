@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import type { Idea } from "../../../packages/shared/src/chat.js";
 import { sanitize, hasLink, ideaKey, safeDisplayName } from "./chat-router.js";
+import { moderateIdeas } from "./moderation-policy.js";
 
 export interface Curation {
   cards: ForgeCard[];
@@ -32,7 +33,11 @@ export const worldOnlyReason =
 const forbiddenIdea =
   /\b(?:delete\s+(?:(?:all|every|the|my|your)\s+)*(?:files?|folders?|system)|steal|dox\w*|password|api[ -]?key|openai\s*key|process\s*\.\s*env|loops?\s+forever|infinite\s+loop|credentials?|credit[ -]?card|advertis\w*|buy\s|spam|unrelated|slur[ _-]?placeholder|subscribe to|ignore (?:all|previous)|reveal secrets|system prompt|powershell|terminal|cmd\.exe|install|download|real.world|kill yourself)\b/iu;
 export function allowedIdea(text: string): boolean {
-  return !forbiddenIdea.test(text) && !hasLink(text);
+  const explicitSexual =
+    /\b(?:porn(?:ography|ographic)?|explicit\s+sexual|sexual\s+(?:content|acts?|exploitation)|nude|nudity)\b/iu;
+  return (
+    !forbiddenIdea.test(text) && !explicitSexual.test(text) && !hasLink(text)
+  );
 }
 export const producerCardsSchema = z.object({
   cards: z
@@ -223,11 +228,7 @@ export function openAIProducer(env: NodeJS.ProcessEnv): Producer {
   const model = env.PRODUCER_MODEL;
   return new ForgeProducer({
     async moderate(input, signal) {
-      const result = await client.moderations.create(
-        { model: "omni-moderation-latest", input },
-        { signal },
-      );
-      return result.results.map((r) => r.flagged);
+      return moderateIdeas(client, input, signal);
     },
     async cards(input, signal) {
       const response = await client.responses.parse(

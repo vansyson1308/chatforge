@@ -10,7 +10,7 @@
 - M3 Forge loop: lead QC requested live checkpoint, parity, overlap and hygiene fixes; addressed together with M4.
 - M4 Overlay HUD, dashboard, Mod API v1.1 and game polish: follow-up QC fixes addressed alongside M5.
 - M5 Hardening and final product pass: lead QC approved.
-- M6 Submission kit and demo pipeline: current; verification in progress under brief/prompts/P7_M6_SUBMISSION_KIT_AND_VIDEO.md.
+- M6 Submission kit and demo pipeline: current; real-viewer follow-up under brief/prompts/P9_REAL_VIEWER_PATH.md. Take 3 is recorded by the lead after these fixes.
 
 Update this status when milestones change. Do not build ahead without an explicit request.
 

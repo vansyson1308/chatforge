@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import type { Idea } from "../../../packages/shared/src/chat.js";
 import { allowedIdea } from "./producer.js";
 import { safeDisplayName } from "./chat-router.js";
+import { moderateIdeas } from "./moderation-policy.js";
 
 type Visible = { author: string; text: string; source: string };
 
@@ -120,10 +121,6 @@ export function openAIFeedModeration(
     : undefined;
   return new FeedModeration(async (input, signal) => {
     if (!client) throw Error("Moderation unavailable");
-    const result = await client.moderations.create(
-      { model: "omni-moderation-latest", input },
-      { signal },
-    );
-    return result.results.map((r) => r.flagged);
+    return moderateIdeas(client, input, signal);
   }, changed);
 }

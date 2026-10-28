@@ -16,3 +16,13 @@ The edit is under 2:55; speed-up is visibly labelled. Public Twitch chat is read
 | 2:02–2:14        | Full-screen keep and repo URL                                          | Every round leaves a mark. Chat ships the game.                                                      |
 
 Run `pnpm demo:take` for Twitch plus SIM, or `pnpm demo:take --sim --minutes 6` for a labelled dry run. Stop any running server first; the take creates a fresh season and preserves Twitch tokens. `pnpm demo:edit <take>` uses that take's timeline, actual video and public GitHub pages. An optional `highlights.json` is a reviewed, take-specific moderation annotation; without one the edit omits the moderation close-up rather than inventing timestamps. Check the real chat and final edit before publishing. The recorded malicious Twitch request in the reviewed take was rejected in the following curation; the earlier bot refusal came from SIM input. The viewer's first vote appeared after the winner announcement.
+
+For take 3, submit the dragon idea during COLLECTING, wait for the addressed acceptance/card replies, and cast the vote while VOTING is open. A late real idea arriving while the Producer is working triggers a refreshed selection before cards publish. Under continuous real input, curation allows at most two refreshes within the existing 90-second deadline; exhaustion fails visibly instead of silently publishing a SIM-only selection. Real authors retain priority and credits; the lead still verifies the real winning build and showcase in the new footage.
+
+Reuse the reviewed moderation close-up from take 1 without changing the editor:
+
+```powershell
+pnpm demo:edit runtime/recordings/TAKE_3 --moderation-from runtime/recordings/2026-10-28T01-47-43-629Z
+```
+
+The source take's `highlights.json` supplies `moderationAtSeconds`, `maliciousRowY`, `refusalRowY`, `chatCropWidth` and `chatCropHeight`. Row coordinates mark text centers in the source capture. The editor uses that take's chat video/duration and labels it as an earlier real Twitch take; every other shot comes from the new take. Invalid timestamps fail explicitly. Hook/outro titles sit on their own band at y=785–875, above the caption bar and below the HUD. No new recording was made for this fix; existing take frames were decoded to verify placement and cross-take source selection.

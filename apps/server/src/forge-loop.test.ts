@@ -12,11 +12,121 @@ import { ModHost } from "./mod-host.js";
 import { CrowdSim } from "./crowd-sim.js";
 import { gatekeeper } from "./gatekeeper.js";
 import type { Builder } from "./builder.js";
-import type { Producer } from "./producer.js";
+import { ForgeProducer, type Producer } from "./producer.js";
+import { moderationCorpus } from "./moderation-corpus.js";
+import type { Chat } from "../../../packages/shared/src/chat.js";
+import { FeedModeration } from "./feed-moderation.js";
 import { testCards } from "./forge-fixtures.js";
 import { goodMod } from "./forge-fixtures.js";
 
 afterEach(() => vi.useRealTimers());
+const realChat: Chat = {
+  type: "chat",
+  source: "twitch",
+  userId: "real-viewer",
+  login: "vansyson1308",
+  displayName: "vansyson1308",
+  text: `!idea ${moderationCorpus[0].text}`,
+  badges: [],
+  isBroadcaster: false,
+  isMod: false,
+  emoteOnly: false,
+};
+it.each([20000, 62800])(
+  "curates and credits a real idea arriving at t=%i, including during Producer work",
+  async (arrival) => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const cards = vi.fn(async (input: string) => {
+      if (arrival > 45000 && cards.mock.calls.length === 1) await waiting;
+      const { groups } = JSON.parse(input) as {
+        groups: { id: number; credits: { source: string }[] }[];
+      };
+      const real = groups.find((g) =>
+        g.credits.some((c) => c.source === "twitch"),
+      );
+      return {
+        value: {
+          cards: testCards.map((card, index) => ({
+            ...card,
+            groupIds: index === 0 && real ? [real.id] : [],
+          })),
+        },
+        tokens: 7,
+      };
+    });
+    const producer = new ForgeProducer({
+      moderate: async (texts) => texts.map(() => false),
+      cards,
+    });
+    const f = await fixture(undefined, undefined, undefined, producer);
+    const feed = new FeedModeration(async (texts) => texts.map(() => false));
+    const acknowledgements: Promise<void>[] = [];
+    f.inbox.onAdded = (idea) => {
+      const roundId = f.loop.round?.id;
+      acknowledgements.push(
+        feed.approveText(idea.text).then((approved) => {
+          if (approved) {
+            f.loop.acknowledgeIdea(idea, roundId);
+            f.loop.acknowledgeIdea(idea, roundId);
+          }
+        }),
+      );
+    };
+    try {
+      f.loop.start("demo");
+      f.loop.start("demo");
+      await vi.advanceTimersByTimeAsync(arrival);
+      expect(f.loop.round?.stage).toBe(
+        arrival < 45000 ? "COLLECTING" : "CURATING",
+      );
+      expect(f.router.route(realChat)).toBe("idea queued");
+      await Promise.all(acknowledgements);
+      release();
+      if (arrival < 45000) await vi.advanceTimersByTimeAsync(45000 - arrival);
+      await f.loop.settled();
+      const idea = f.inbox.ideas.find((i) => i.userId === realChat.userId)!;
+      expect(f.loop.round?.stage).toBe("VOTING");
+      expect(f.loop.round?.cards[0]?.ideaIds).toContain(idea.id);
+      expect(f.loop.round?.cards[0]?.credits).toEqual([
+        { id: realChat.userId, name: realChat.displayName, source: "twitch" },
+      ]);
+      expect(
+        f.announcements.filter((s) => s.startsWith("Forge open!")),
+      ).toHaveLength(1);
+      expect(
+        f.announcements.filter((s) => s.includes("your idea is in the forge!")),
+      ).toEqual(["@vansyson1308 your idea is in the forge!"]);
+      expect(
+        f.announcements.filter((s) => s.includes("your idea is card")),
+      ).toEqual(["@vansyson1308 your idea is card 1 — !vote 1"]);
+      expect(cards).toHaveBeenCalledTimes(arrival < 45000 ? 1 : 2);
+    } finally {
+      release();
+      feed.close();
+      await f.cleanup();
+    }
+  },
+);
+it("never acknowledges SIM, unsafe or stale-round input", async () => {
+  const f = await fixture();
+  const feed = new FeedModeration(async (texts) => texts.map(() => true));
+  try {
+    f.loop.start("demo");
+    const idea = f.inbox.add(realChat, "unsafe", Date.now())!;
+    if (await feed.approveText(idea.text))
+      f.loop.acknowledgeIdea(idea, f.loop.round?.id);
+    f.loop.acknowledgeIdea({ ...idea, source: "simulator" }, f.loop.round?.id);
+    f.loop.acknowledgeIdea(idea, -1);
+    expect(f.announcements.some((s) => s.includes("your idea"))).toBe(false);
+  } finally {
+    feed.close();
+    await f.cleanup();
+  }
+});
 it.each(["simulator", "twitch"] as const)(
   "announces rejected ideas only for Twitch authors (%s)",
   async (source) => {
@@ -294,6 +404,7 @@ async function fixture(
   }
   return {
     loop,
+    router,
     inbox,
     host,
     frames,
