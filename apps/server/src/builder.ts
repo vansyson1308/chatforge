@@ -132,15 +132,24 @@ export class WorkspaceBuilder implements Builder {
     const home = resolve(this.root, "runtime/secrets/forge-codex");
     await mkdir(home, { recursive: true });
     const originalHome = this.env.CODEX_HOME ?? resolve(homedir(), ".codex");
-    try {
-      await copyFile(
-        resolve(originalHome, "auth.json"),
-        resolve(home, "auth.json"),
-      );
-    } catch {
-      throw Error(
-        "Codex login missing: run codex login on this machine, then retry",
-      );
+    // CODEX_AUTH=apikey runs the same Codex agent with API-key auth (billed to the
+    // OpenAI API project) instead of the operator's ChatGPT login.
+    const apiKeyAuth = codexUsesApiKey(this.env);
+    if (apiKeyAuth) {
+      if (!this.env.OPENAI_API_KEY)
+        throw Error("CODEX_AUTH=apikey requires OPENAI_API_KEY in .env");
+      await rm(resolve(home, "auth.json"), { force: true });
+    } else {
+      try {
+        await copyFile(
+          resolve(originalHome, "auth.json"),
+          resolve(home, "auth.json"),
+        );
+      } catch {
+        throw Error(
+          "Codex login missing: run codex login on this machine, then retry",
+        );
+      }
     }
     // Disable discoverable local skills explicitly; do not depend on an obsolete global feature flag.
     const skillPaths = new Set<string>();
@@ -198,6 +207,7 @@ export class WorkspaceBuilder implements Builder {
       if (this.env[key]) env[key] = this.env[key]!;
     this.codex = new Codex({
       env,
+      ...(apiKeyAuth ? { apiKey: this.env.OPENAI_API_KEY } : {}),
       config: {
         web_search: "disabled",
         allow_login_shell: false,
@@ -364,3 +374,10 @@ export class WorkspaceBuilder implements Builder {
 }
 // Exported for diagnostics without exposing configuration or secrets.
 export const builderModulePath = fileURLToPath(import.meta.url);
+
+/** True when the Codex Builder should authenticate with the OpenAI API key. */
+export function codexUsesApiKey(
+  env: Record<string, string | undefined>,
+): boolean {
+  return (env.CODEX_AUTH ?? "").trim().toLowerCase() === "apikey";
+}

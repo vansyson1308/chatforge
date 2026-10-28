@@ -18,7 +18,7 @@ import {
 } from "./local-http.js";
 import { ForgeLoop } from "./forge-loop.js";
 import { ForgeStore } from "./forge-store.js";
-import { WorkspaceBuilder } from "./builder.js";
+import { WorkspaceBuilder, codexUsesApiKey } from "./builder.js";
 import { openAIProducer } from "./producer.js";
 import { openAIFeedModeration } from "./feed-moderation.js";
 import { runGate } from "./gate-runner.js";
@@ -286,18 +286,20 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/readiness") {
-      let codexLoginFound = false;
-      try {
-        await access(
-          resolve(
-            process.env.CODEX_HOME ?? resolve(homedir(), ".codex"),
-            "auth.json",
-          ),
-        );
-        codexLoginFound = true;
-      } catch {
-        /* Local login has not been found. */
-      }
+      let codexLoginFound =
+        codexUsesApiKey(process.env) && !!process.env.OPENAI_API_KEY;
+      if (!codexLoginFound)
+        try {
+          await access(
+            resolve(
+              process.env.CODEX_HOME ?? resolve(homedir(), ".codex"),
+              "auth.json",
+            ),
+          );
+          codexLoginFound = true;
+        } catch {
+          /* Local login has not been found. */
+        }
       const status = audience.status();
       json(res, 200, {
         twitch: status.auth.health === "healthy",
