@@ -22,6 +22,11 @@ export class ModExecutionError extends Error {
   }
 }
 
+/** Loads the QuickJS WebAssembly module once; synchronous isolate creation needs it. */
+export async function initQuickJS(): Promise<void> {
+  await getQuickJS();
+}
+
 /** Low-level isolated execution primitive. Host bindings and lifecycle are layered above it. */
 export class ModIsolate {
   private deadline = 0;

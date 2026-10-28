@@ -7,12 +7,15 @@ import {
 } from "../../../packages/engine/src/invariants.js";
 import type { RenderSnapshot } from "../../../packages/shared/src/protocol.js";
 import { safeDisplayName } from "./chat-router.js";
+import { initQuickJS } from "../../../packages/sandbox/src/isolate.js";
 
 if (!parentPort) throw new Error("Simulation must run in a worker thread");
 const port = parentPort;
 const world = new World(2026);
 const host = new ModHost(world);
-let pending = Promise.resolve();
+// A resumed season restores mods synchronously, so QuickJS must be ready
+// before the first queued command (restore can arrive before any load).
+let pending: Promise<void> = initQuickJS();
 let busy = false;
 const performanceBins = new Uint32Array(1001);
 const send = () => {

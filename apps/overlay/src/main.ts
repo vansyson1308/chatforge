@@ -9,6 +9,8 @@ import {
 } from "../../../packages/shared/src/forge.js";
 import { drawForgeHud } from "./forge-hud.js";
 import { formatCredit } from "../../../packages/shared/src/forge.js";
+/** World-space top edge (below the HUD banner) for drawing persistent props. */
+const PROP_SAFE_TOP = 95;
 
 type Entity = {
   id: number;
@@ -496,7 +498,11 @@ function render(time: number): void {
       entity.viewer,
     );
     const size = (entity.team === "hero" ? 42 : 38) * (entity.scale ?? 1);
-    ctx.drawImage(actorSprite(sprite, size), x - size / 2, y - size);
+    // Sky/rampart props may be placed near the top of the world; keep the whole
+    // sprite below the HUD banner so a community creation is never hidden.
+    const drawY =
+      entity.team === "prop" ? Math.max(y, PROP_SAFE_TOP + size) : y;
+    ctx.drawImage(actorSprite(sprite, size), x - size / 2, drawY - size);
     if (entity.hat && current?.sprites[entity.hat])
       ctx.drawImage(
         pixelSprite(entity.hat, current.sprites[entity.hat]),
