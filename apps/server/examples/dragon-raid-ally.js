@@ -59,12 +59,6 @@ export function register(api) {
   });
   api.registerCommand("!dragon", summon, { cooldownSec: 25 });
   api.on("twitch:raid", summon);
-  api.every(30, () => {
-    if (!api.state.introduced) {
-      api.state.introduced = true;
-      summon();
-    }
-  });
 }
 export const forgeTest = {
   commands: ["!dragon"],

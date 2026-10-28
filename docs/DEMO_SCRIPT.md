@@ -1,16 +1,17 @@
-# ChatForge — three-minute demo draft
+# ChatForge — demo narration and recording guide
 
-| Time      | Picture                                               | Narration / action                                                                                                                                                 |
-| --------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0:00–0:15 | Keep under siege; named heroes defending              | “What if chat could ship the game while you stream?”                                                                                                               |
-| 0:15–0:35 | Four viewer ideas entering the feed                   | Show real Twitch !idea and visible author credit. SIM footage must keep its SIM labels.                                                                            |
-| 0:35–0:55 | Three large cards and moving vote bars                | “The Producer turns ideas into buildable spectacles. Chat chooses.” Type !vote.                                                                                    |
-| 0:55–1:10 | Winner hits the anvil                                 | “Now Codex writes a real mod, inside a restricted workspace.”                                                                                                      |
-| 1:10–1:45 | Live Spec/Code/Test/Deploy ticker                     | Compress waiting with an explicit speed-up label. Show actual local test command and host report. Never fabricate a repair.                                        |
-| 1:45–2:20 | SHIPPED; sprite arrives, timed climax, community gear | Let the event play at real speed. Show credits and trigger the new chat command.                                                                                   |
-| 2:20–2:40 | Safe Mode / rollback demonstration                    | “Generated code only runs in QuickJS. Static checks, baseline validation and two deterministic simulations protect the live game.” Label any staged failure drill. |
-| 2:40–3:00 | Keep's patch flags + Hall of Patches + patch notes    | “Codex built ChatForge. And Codex is the engine inside it. Your community leaves its mark.”                                                                        |
+Final edit: under 2:55. The final YouTube video must use a real Twitch take; a SIM-only draft is labelled and cannot establish Twitch operation. All time compression is labelled `x4`. Public chat is read-only; no browser login is required.
 
-Record at 1920×1080. Audio may be enabled explicitly with A. Hide development hints. Preserve Twitch/SIM provenance. Choose the final three real soak mods after inspecting their action footage; screenshots are evidence, not a substitute for video.
+| Time      | Picture                            | Narration                                                                                                            |
+| --------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 0:00–0:12 | Real showcase; title               | What if Twitch chat could ship the game while you stream? Meet ChatForge.                                            |
+| 0:12–0:24 | Ideas and moderated feed           | Viewers pitch ideas in chat. Local rules and moderation keep unapproved ideas off the broadcast.                     |
+| 0:24–0:34 | Vote cards and chat                | The Producer turns community ideas into cards. Chat votes on what happens next.                                      |
+| 0:34–0:50 | Codex code and sprite, labelled x4 | Codex writes a real game mod in a restricted workspace. The stream sees the code and sprite come together.           |
+| 0:50–0:58 | Gatekeeper checks                  | Gatekeeper validates the mod and runs deterministic simulations before it can go live.                               |
+| 0:58–1:12 | SHIPPED and SHOWCASE               | The winning idea ships into the running game, credits its contributors and gets a live showcase.                     |
+| 1:12–1:30 | Architecture and trust boundaries  | The server owns the game. Generated mods run inside QuickJS, and the overlay receives read-only snapshots.           |
+| 1:30–1:50 | Codex story and build evidence     | Codex built ChatForge from an empty folder in one main thread. The Codex SDK is also the Builder inside the product. |
+| 1:50–2:02 | The community-built keep and repo  | Every round leaves a mark. Twitch chat doesn't just play the game. Chat ships the game.                              |
 
-For a repeatable take, stop the server and run `pnpm demo:reset`, then `pnpm stream`. The dashboard's Demo Director can skip the current countdown, select the winning card, replay the last active showcase and fire SIM-labelled events; it never substitutes a fake build. Use `/overlay/?mode=overlay&clean=1` to hide the sound chip. SHOWCASE runs for `SHOWCASE_MS` (14 seconds by default): the first four seconds show the title and credits, followed by the mod's declared command or event. The next collection begins afterwards. The on-stream idea feed remains blank when moderation is unavailable.
+The recording commands are `pnpm demo:take` for Twitch plus SIM and `pnpm demo:take --sim --minutes 6` for a labelled dry run. Stop any running server first; the take creates a fresh season and preserves Twitch tokens. `pnpm demo:edit <take>` renders from that take's timeline and the actual recordings. The lead must inspect the public Twitch popout, choose a real round containing visible `!idea`, `!vote`, and the shipped announcement, verify the filtered-idea demonstration separately, and replace the README's placeholder with the final public YouTube URL. Never claim the SIM-only draft demonstrates a real Twitch interaction.

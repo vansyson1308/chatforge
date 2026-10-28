@@ -101,6 +101,9 @@ export class ModHost {
   commands(id: string): string[] {
     return Object.keys(this.mods.get(id)?.declarations.commands ?? {});
   }
+  commandCooldown(id: string, command: string): number | undefined {
+    return this.mods.get(id)?.declarations.commands[command];
+  }
   events(id: string): string[] {
     return [...(this.mods.get(id)?.declarations.events ?? [])];
   }

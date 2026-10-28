@@ -24,7 +24,9 @@
     "start": "pnpm --filter @chatforge/server dev",
     "stream": "pnpm build && node scripts/stream.mjs",
     "demo:reset": "node scripts/demo-reset.mjs",
-    "forge:soak": "pnpm build && node scripts/soak-forge.mjs"
+    "forge:soak": "pnpm build && node scripts/soak-forge.mjs",
+    "demo:take": "pnpm build && node scripts/demo-take.mjs",
+    "demo:edit": "node scripts/demo-edit.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

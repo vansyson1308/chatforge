@@ -392,12 +392,11 @@ export function drawForgeHud(
         ctx.fillStyle = /\b(function|const|return|export)\b/u.test(line)
           ? "#f7bd7e"
           : "#b5d8c1";
-        ctx.fillText(
-          line,
-          x + 18,
-          y + 181 + index * 13 + codeOffset,
-          view.code?.sprite ? 170 : w - 36,
-        );
+        const width = view.code?.sprite ? 170 : w - 36;
+        let visible = line;
+        while (visible.length && ctx.measureText(visible).width > width)
+          visible = visible.slice(0, -1);
+        ctx.fillText(visible, x + 18, y + 181 + index * 13 + codeOffset);
       });
       ctx.restore();
       if (view.code?.sprite) {

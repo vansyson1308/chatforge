@@ -121,10 +121,10 @@ it("requires canonical simulated attribution in generated banners", async () => 
   expect(repeated.ok).toBe(false);
   expect(repeated.checks.at(-1)?.detail).toContain("must be followed by (SIM)");
 }, 30000);
-it("rejects a showcase that only reports cooldown while a mod is active", async () => {
+it("rejects a main sequence that starts itself before the showcase", async () => {
   const source = goodMod.replace(
-    "if (api.state.active) { api.fx.ring(600,510,100,'#ffd347',30); return; }",
-    "if (api.state.active) return;",
+    "api.registerCommand('!spark', begin",
+    "api.every(30, () => { if (!api.state.introduced) { api.state.introduced = true; begin(); } });\n  api.registerCommand('!spark', begin",
   );
   const report = await gatekeeper({
     modId: "showcase-check",
@@ -135,8 +135,25 @@ it("rejects a showcase that only reports cooldown while a mod is active", async 
   });
   expect(report.ok).toBe(false);
   expect(report.checks.at(-1)?.detail).toContain(
-    "Showcase command must immediately",
+    "Main showcase sequence fired during idle",
   );
+});
+it("rejects a showcase that cannot be repeated after its declared cooldown", async () => {
+  const source = goodMod
+    .replace("api.state.active = false;", "api.state.active = true;")
+    .replace(
+      "if (api.state.active) { api.fx.ring(600,510,100,'#ffd347',30); return; }",
+      "if (api.state.active) return;",
+    );
+  const report = await gatekeeper({
+    modId: "showcase-repeat",
+    source,
+    checkpoint: new World().snapshot(),
+    commands: ["!spark"],
+    spectacle: true,
+  });
+  expect(report.ok).toBe(false);
+  expect(report.checks.at(-1)?.detail).toContain("Showcase trigger 2");
 });
 it("marches waves along the ground, damages/rebuilds the keep and presents a fifth-wave boss", () => {
   const world = new World(77);

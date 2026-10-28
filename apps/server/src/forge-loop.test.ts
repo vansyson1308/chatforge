@@ -158,7 +158,7 @@ it("a later live failure rolls back the generated set and broadcasts ROLLED_BACK
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
   const source = goodMod.replace(
     "export function register(api) {",
-    "export function register(api) { api.every(901,()=>{throw Error('late failure')});",
+    "export function register(api) { api.every(1801,()=>{throw Error('late failure')});",
   );
   const f = await fixture({ build: async () => ({ source, tokens: 0 }) });
   try {
@@ -167,7 +167,7 @@ it("a later live failure rolls back the generated set and broadcasts ROLLED_BACK
     await vi.advanceTimersByTimeAsync(40000);
     await f.loop.settled();
     expect(f.loop.build?.stage).toBe("SHOWCASE");
-    for (let i = 0; i < 901; i++) f.host.tick();
+    for (let i = 0; i < 1801; i++) f.host.tick();
     expect(f.host.diagnostics).toHaveLength(1);
     expect(f.host.world.hash()).toBe(before);
     f.loop.acceptCheckpoint(f.host.exportCheckpoint(), true);

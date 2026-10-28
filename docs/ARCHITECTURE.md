@@ -1,5 +1,22 @@
 # Architecture
 
+## Forge loop and trust boundaries
+
+```mermaid
+flowchart LR
+  A[Untrusted Twitch and SIM ideas] --> B[Local rules + OpenAI moderation]
+  B --> C[Producer cards] --> D[Chat vote] --> E[Codex SDK Builder]
+  E --> F[Gatekeeper: static + simulation + showcase-ready]
+  F -->|pass| G[QuickJS mod in simulation worker]
+  F -->|fail| H[Keep last good world]
+  G --> I[Shipped + showcase] --> A
+  G --> J[Read-only snapshots to Canvas overlay]
+  K[Local dashboard] --> L[Server controls]
+  L --> G
+```
+
+The [diagram PNG](media/architecture.png) summarizes the trust boundaries for video. Viewer input and generated source are untrusted; only bounded QuickJS bindings reach the deterministic world. A 300-tick idle check and repeat-trigger check cover the declared main showcase markers; ambient effects must use different markers. The checks cannot infer every possible semantic definition of a mod's main sequence.
+
 ## Final product pass
 
 The current lead QC explicitly changes the brief's optional overlapping collection behavior: the next round now starts after the 14-second SHOWCASE, not while Codex is building. Deployment still uses the authoritative worker and atomic checkpoint. The first four seconds show the shipped card; the next segment invokes the new mod's own declared `forgeTest` command or event inside its QuickJS runtime. This is a requested change to timing, not an architecture replacement.
@@ -38,7 +55,7 @@ flowchart LR
   Deploy --> HUD
 ```
 
-Separate collecting/building round records allow collection during a build with one build slot. Every transition is persisted before broadcast. Demo uses 45/30/10 seconds; Normal uses 90/45/manual approval. SQLite stores seasons, rounds/transitions, cards, votes, builds/reports/thread IDs, mod versions and contributors. The worker publishes a complete checkpoint including rollback history every 300 ticks. Startup restores it and marks interrupted AI work failed rather than silently billing or deploying. Patch notes derive from persisted shipped cards and credits.
+Separate round and build records preserve one build slot; collection begins only after showcase completes. Every transition is persisted before broadcast. Demo uses 45/30/10 seconds; Normal uses 90/45/manual approval. SQLite stores seasons, rounds/transitions, cards, votes, builds/reports/thread IDs, mod versions and contributors. The worker publishes a complete checkpoint including rollback history every 300 ticks. Startup restores it and marks interrupted AI work failed rather than silently billing or deploying. Patch notes derive from persisted shipped cards and credits.
 
 Part A fixes: cross-site Fetch Metadata exceptions apply only to top-level GET document navigations for static pages/OAuth; APIs, mutations and WS stay strict. Outbound prefix `\u2692` is verified as UTF-8 E2 9A 92. Simulator RNG checkpoints and a partial SQLite unique index on pending normalized source/user/text prevent replay duplicates across toggles/restarts. Migration retains historical duplicates as rejected rows.
 

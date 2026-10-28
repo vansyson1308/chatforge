@@ -9,8 +9,8 @@
 - M2 Twitch and Crowd Sim: complete; lead QC approved after a real Twitch live test on vansyson1308 (all seven subscriptions and real chat delivery verified).
 - M3 Forge loop: lead QC requested live checkpoint, parity, overlap and hygiene fixes; addressed together with M4.
 - M4 Overlay HUD, dashboard, Mod API v1.1 and game polish: follow-up QC fixes addressed alongside M5.
-- M5 Hardening, simulated-stream end-to-end test and performance: lead QC approved; final product pass is in progress under brief/prompts/P6_FINAL_PRODUCT_PASS.md.
-- M6 Demo kit.
+- M5 Hardening and final product pass: lead QC approved.
+- M6 Submission kit and demo pipeline: current; verification in progress under brief/prompts/P7_M6_SUBMISSION_KIT_AND_VIDEO.md.
 
 Update this status when milestones change. Do not build ahead without an explicit request.
 
@@ -21,7 +21,7 @@ Target Windows 11, PowerShell, Node 24 and pnpm 10. Never write bash-only script
 - Install: `pnpm install --frozen-lockfile`
 - Dev: `pnpm dev` (builds, then starts localhost server, Vite overlay 5173 and React dashboard 5174)
 - Stream: `pnpm stream` (builds, starts the local server and prints dashboard, overlay and OBS instructions)
-- New recording take: stop the server, then `pnpm demo:reset` (new empty season; Twitch tokens and previous seasons remain).
+- New recording take: stop the server, then `pnpm demo:take` (new empty season; Twitch tokens and previous seasons remain). Use `pnpm demo:take --sim --minutes 6` for a SIM-only dry run and `pnpm demo:edit <take>` to render.
 - Build: `pnpm build`
 - Typecheck: `pnpm typecheck`
 - Lint: `pnpm lint`

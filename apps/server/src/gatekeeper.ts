@@ -218,6 +218,90 @@ export async function checkBaseline(
     host.dispose();
   }
 }
+// The declared non-text FX and owned spawn kinds are the observable main
+// sequence markers; ambient effects must use different markers.
+async function checkShowcaseReady(
+  input: GateInput,
+  test: ReturnType<typeof inspectMod>,
+): Promise<void> {
+  const world = new World(2026),
+    host = new ModHost(world);
+  try {
+    await host.load("gate-init", "export function register(api) {}");
+    host.restore(input.checkpoint);
+    await host.load(input.modId, input.source);
+    for (let i = 0; i < 8; i++) world.joinViewer(`Gate${i}`, `gate:${i}`, true);
+    const command = test.commands?.[0],
+      event = command ? undefined : test.events?.[0];
+    const cooldown = command ? host.commandCooldown(input.modId, command) : 0;
+    if (
+      command
+        ? cooldown === undefined
+        : !event || !host.events(input.modId).includes(event)
+    )
+      throw Error("forgeTest must name a registered showcase command or event");
+    if ((cooldown ?? 0) > 1800)
+      throw Error("Showcase command cooldown must not exceed 60 seconds");
+    const mainFx = new Set(
+      (test.expect.fx ?? []).filter(
+        (name) => name !== "banner" && name !== "text",
+      ),
+    );
+    const mainKinds = new Set(test.expect.spawnKinds ?? []);
+    if (!mainFx.size && !mainKinds.size)
+      throw Error(
+        "Declare a non-text main FX or spawn kind in forgeTest.expect",
+      );
+    const seen = new Set(world.state.entities.map((entity) => entity.id));
+    const observe = () => {
+      const effects = world.drainFx();
+      const found =
+        effects.some(
+          (effect) =>
+            effect.modId === input.modId && mainFx.has(effect.type as never),
+        ) ||
+        world.state.entities.some(
+          (entity) =>
+            !seen.has(entity.id) &&
+            entity.tags.includes(`mod:${input.modId}`) &&
+            mainKinds.has(entity.kind),
+        );
+      for (const entity of world.state.entities) seen.add(entity.id);
+      if (host.diagnostics.length)
+        throw Error(`Runtime rollback: ${host.diagnostics[0]!.message}`);
+      const failure = invariantFailure(world.state);
+      if (failure) throw Error(failure);
+      return found;
+    };
+    world.drainFx();
+    for (let tick = 0; tick < 300; tick++) {
+      host.tick();
+      if (observe())
+        throw Error(
+          "Main showcase sequence fired during idle before the host trigger",
+        );
+    }
+    for (let run = 0; run < 2; run++) {
+      host.showcase(input.modId, command, event);
+      let found = observe();
+      for (let tick = 0; tick < 150; tick++) {
+        host.tick();
+        found = observe() || found;
+      }
+      if (!found)
+        throw Error(
+          `Showcase trigger ${run + 1} did not produce a declared main effect within 150 ticks`,
+        );
+      if (run === 0)
+        for (let tick = 150; tick < (cooldown ?? 0); tick++) {
+          host.tick();
+          observe();
+        }
+    }
+  } finally {
+    host.dispose();
+  }
+}
 export async function gatekeeper(
   input: GateInput,
   onCheck?: (check: GateReport["checks"][number]) => void,
@@ -259,6 +343,15 @@ export async function gatekeeper(
       ok: true,
       detail: "24 KiB / restricted AST / literal contract",
     });
+    if (input.spectacle) {
+      phase = "showcase-ready";
+      await checkShowcaseReady(input, test);
+      checked({
+        name: phase,
+        ok: true,
+        detail: "300 idle ticks; two trigger responses separated by cooldown",
+      });
+    }
     for (let run = 0; run < 2; run++) {
       phase = `simulation ${run + 1}`;
       const world = new World(2026),
@@ -502,7 +595,7 @@ export async function gatekeeper(
             fx.size < 2)
         )
           throw Error(
-            `Too subtle: spectacle ${score}/10. Auto-introduce before 10s, draw a >=12x12 sprite using >=4 colors, register a command, layer >=2 visual FX, and stage telegraph/climax/aftermath over >=3s. Observed sprites=${drawnSprites.size}, commands=${commands}, FX=${fx.size}, firstTick=${first}.`,
+            `Too subtle: spectacle ${score}/10. Respond to the host showcase, draw a >=12x12 sprite using >=4 colors, register a command, layer >=2 visual FX, and stage telegraph/climax/aftermath over >=3s. Observed sprites=${drawnSprites.size}, commands=${commands}, FX=${fx.size}, firstTick=${first}.`,
           );
         if (input.spectacle) {
           const command = test.commands?.[0];

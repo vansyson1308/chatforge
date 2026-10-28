@@ -77,7 +77,7 @@ it("fake EventSub chat reaches LIVE, then failed repair preserves the game and a
                 .replace("forged by the community", "@ada")
                 .replace(
                   "export function register(api) {",
-                  "export function register(api) { api.every(901,()=>{throw Error('late fault')});",
+                  "export function register(api) { api.every(1801,()=>{throw Error('late fault')});",
                 )
             : "export function register(api){} export const forgeTest={expect:{minEffects:1}};",
         tokens: 0,
@@ -179,7 +179,7 @@ it("fake EventSub chat reaches LIVE, then failed repair preserves the game and a
     expect(
       frames.some((v) => v.build?.stage === "BUILDING" && v.build.attempts > 1),
     ).toBe(true);
-    for (let i = 0; i < 901; i++) host.tick();
+    for (let i = 0; i < 1801; i++) host.tick();
     expect(host.diagnostics).toHaveLength(1);
     loop.acceptCheckpoint(host.exportCheckpoint(), true);
     expect(frames.at(-1)?.build?.stage).toBe("ROLLED_BACK");

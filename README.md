@@ -1,51 +1,54 @@
 # ChatForge
 
-[![CI](https://github.com/vansyson1308/chatforge/actions/workflows/ci.yml/badge.svg)](https://github.com/vansyson1308/chatforge/actions/workflows/ci.yml)
+**Twitch chat doesn't just play the game. Chat ships the game, live.**
 
-ChatForge turns Twitch chat into a live game studio: viewers pitch and vote on ideas, then a Codex-powered Builder creates sandboxed game mods that can appear on stream, credited to their creators.
+![A community-built keep and its giant crab showcase](docs/media/hud/final-showcase.png)
 
-**Status: under construction - M5 lead QC approved; final product pass in verification.** The stream HUD shows moderated ideas, voting, Codex's sanitized live code view, Gatekeeper checks and a timed showcase; the keep accumulates community emblems. M6 is reserved for the demo kit.
+[Watch the 3-minute demo](https://www.youtube.com/) · [Architecture](docs/ARCHITECTURE.md) · [Devpost draft](docs/DEVPOST.md) · [Live evidence](docs/media/hud/README.md)
+
+> The video link is a placeholder until the final public YouTube upload. M6 is in progress.
+
+## What it does
+
+- Twitch viewers submit `!idea` pitches while their named heroes defend a persistent pixel-art keep.
+- A Producer filters and curates three cards; chat chooses a winner with `!vote`.
+- The Codex SDK writes a real mod against a constrained API while the stream shows sanitized code and a sprite preview.
+- Gatekeeper checks and simulates the candidate; accepted code runs inside QuickJS and is showcased with contributor credits.
+- The keep evolves across rounds, with patch history, rollback, Safe Mode and a localhost streamer dashboard.
+
+## A round
+
+```mermaid
+flowchart LR
+  Chat["Twitch ideas + labelled SIM"] --> Mod["Rules + moderation"] --> Cards["Producer cards"] --> Vote["Chat vote"] --> Codex["Codex SDK builds"] --> Gate["Gatekeeper tests"] --> Ship["Ship + showcase"] --> Chat
+  Gate -->|fail| Rollback["Keep last good world"]
+```
+
+## How Codex was used
+
+Codex built ChatForge from an empty folder in one main working thread, guided by the lead prompts in [`brief/prompts/`](brief/prompts/) and documented in the [Codex journey](docs/CODEX_JOURNEY.md). Separately, the **Codex SDK is the live Builder inside ChatForge**: it writes each candidate mod in a restricted workspace and runs the local test before the host independently gates it.
+
+Evidence: the 45-minute SIM soak delivered **21/21 real builds LIVE**; in a later Twitch + SIM verification, **3/3 real builds shipped on attempt one**, with a median build time of **40.3 seconds** ([report](docs/media/hud/final-live-report.json)). The last complete local suite before M6 contained **185 tests**; the repository had **18 commits** at the approved final product pass. These are measurements of those runs, not guarantees for every future build.
+
+## Safety and honesty
+
+Generated mods run only in QuickJS with resource limits, never in the page or Node host realm. Gatekeeper performs static validation and deterministic simulations; the live idea feed requires both local rules and OpenAI moderation and fails closed when moderation is unavailable. Viewer text is rendered as text, not HTML. Crowd Sim names and events are labelled **SIM**; its output is not Twitch chat. Moderation and tests reduce risk but cannot guarantee detection of every harmful input or gameplay defect.
 
 ## Quick start
 
-Requires Node 24 and pnpm 10. In PowerShell:
+Requires Windows 11, Node 24, pnpm 10, Chrome and a Codex login. In PowerShell:
 
 ```powershell
 corepack enable
 pnpm install --frozen-lockfile
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
+Copy-Item .env.example .env
+pnpm stream
 ```
 
-`pnpm stream` builds and starts one loopback server and prints dashboard, overlay and OBS setup instructions. The default [dashboard](http://localhost:3000/dashboard/) and [overlay](http://localhost:3000/overlay/) use port 3000. `pnpm dev` also starts Vite overlay (5173) and dashboard (5174). Use localhost consistently for OAuth; login on 127.0.0.1 redirects to the registered callback host before creating its cookie. `?mode=overlay` selects the transparent bottom-band view for OBS.
+Set the OpenAI API key and available Producer model in `.env`, and run `codex login`. For Twitch, register a Twitch developer application with redirect `http://localhost:3000/auth/twitch/callback`, set its client ID and secret in `.env`, then connect using the localhost dashboard. See [Twitch setup](docs/LIVE_TEST.md) and [.env.example](.env.example). Credentials stay local. Set `CHAT_SOURCE=simulator` to try Crowd Sim without Twitch. Open the dashboard at `http://localhost:3000/dashboard/`; OBS can use the overlay URL printed by `pnpm stream`.
 
-Set `CHAT_SOURCE=simulator`, `twitch`, or `twitch,simulator` in `.env`; source/intensity/auto-join controls also work in the dashboard. Crowd Sim uses 20 personas and 80 feature ideas plus 10 bad moderation fixtures. SIM tags are mandatory. Simulator help/status replies stay local; round announcements use Twitch only when its source is enabled and connected. `!idea` fills the pending inbox; `!vote 1|2|3` works during voting, with the last vote per viewer counting. Connect Twitch using [LIVE_TEST.md](docs/LIVE_TEST.md).
+## Architecture and limits
 
-For the Forge, put your `OPENAI_API_KEY` and an account-available `PRODUCER_MODEL` in `.env`, and run `codex login` once. Explicit `.env` credentials win over inherited process credentials (important when launching from another AI tool). Start Forge in the dashboard: Demo collects for 45 seconds, votes for 30, and auto-approves after 10; Normal uses 90/45 seconds and manual approval. Stop/cancel, approve/veto, rollback and Safe Mode are available there. The default Builder is Codex `gpt-6.1-sol`, low reasoning, a four-minute deadline and two repair retries; `BUILDER=responses` selects the explicit fallback.
+A Node server owns Twitch, rounds, SQLite and a simulation worker. The Canvas overlay renders read-only snapshots; the React dashboard controls localhost. See [architecture and trust boundaries](docs/ARCHITECTURE.md) and [Mod API](docs/MOD_API.md). Live AI calls consume API credits and Codex usage; model availability, Twitch connectivity and generated results vary. Existing older mods predate the current showcase admission rule. The demo link and final public submission remain manual steps.
 
-The on-stream idea feed is fail-closed: local rules and `omni-moderation-latest` must both pass before a new idea appears. Viewer names pass a local display rule. Text arguments to mod commands are moderated before dispatch. After deployment the 14-second SHOWCASE displays credits, then invokes the mod's declared `forgeTest` command or event after four seconds; the next round starts afterwards. Set `SHOWCASE_MS` to 5000–60000 to adjust the duration.
-
-For recording, the localhost Demo Director can skip a countdown, force a winning card, replay the latest active showcase and fire SIM-labelled Twitch events. It never replaces the real Builder. `?clean=1` hides the sound chip. To start a fresh empty season, stop the server first and run `pnpm demo:reset`; previous seasons and Twitch tokens are preserved.
-
-`pnpm forge:dry-run 1` and `pnpm forge:dry-run 2` run real AI rounds headlessly with simulated viewers, accelerated collection/vote clocks, no Twitch connection, and durable evidence in [sample-mods](docs/media/sample-mods/README.md). Builds are real wall-clock work. A missing key, API refusal, timeout or failed Gatekeeper exits nonzero. Download session patch notes from the dashboard.
-
-Run `pnpm smoke:codex` and `pnpm smoke:openai` for AI prerequisites. `pnpm test:e2e` runs the fake-EventSub-to-real-Gatekeeper flow without connecting to Twitch or paying for AI. See [the brief](brief/CHATFORGE_BRIEF.md) and [architecture](docs/ARCHITECTURE.md).
-
-## M1 verification
-
-`pnpm test:perf` runs the isolated 300-entity / three-mod benchmark. `pnpm test:fps` starts its own isolated built server and uses installed Chrome (no browser downloads) to populate 300 durable test heroes and measure ten seconds of rendering. `node scripts/capture-overlay.mjs` refreshes the two screenshots in `docs/media/`.
-
-All sprites and scene artwork are generated by our Canvas code and included under this repository's MIT license. [Full scene](docs/media/forge-keep-full.png) · [Meteor in flight](docs/media/forge-keep-meteor.png). See [Mod API v1.1](docs/MOD_API.md) before authoring a mod: registration is declarations only, delayed work uses named JSON schedules, and persistent values belong in `api.state`.
-
-## M4 verification and controls
-
-`pnpm forge:soak` runs three real Demo rounds with hype Crowd Sim, real Producer and Codex. It uses actual collection/vote clocks, no Twitch account, and an isolated database. Exact sources, reports and timelines are in [sample-mods](docs/media/sample-mods/README.md); phase captures are in [HUD evidence](docs/media/hud/README.md). This consumes API credit and Codex usage.
-
-`node scripts/soak-45.mjs` runs the longer M5 normal-intensity soak after a build. It uses a separate temporary database, real Producer and Codex, a test-only hourly limit of 30 builds, and no Twitch account. It restarts the local server mid-run and writes evidence under `docs/media/soak/`. This is a paid, 45-minute test; stop it with Ctrl+C and inspect the report for incomplete runs.
-
-The Go-Live checklist reports Twitch, EventSub, local Codex login-file presence, optional OpenAI API verification, overlay connection and Safe Mode. A configured login file is not proof that the remote login is valid. The optional retirement policy removes the oldest active generated mod above the selected limit while keeping its Hall entry and credits. Already-applied world rule changes are retained; they cannot safely be attributed and reversed without replaying later mods.
-
-Press **H** for Hall of Patches and **A** (or Sound) to enable the muted WebAudio cues. Add `?dev=1` only for development hotkeys. `pnpm clean:runtime` removes only regenerable SDK caches after all builds stop, preserving login, sessions and SQLite. Native Windows sandbox binaries may regenerate on the next build.
+All built-in artwork is generated by the project. [MIT license](LICENSE).

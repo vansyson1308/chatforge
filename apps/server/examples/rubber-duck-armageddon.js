@@ -58,12 +58,6 @@ export function register(api) {
   });
   api.registerCommand("!quack", begin, { cooldownSec: 20 });
   api.on("twitch:raid", begin);
-  api.every(30, () => {
-    if (!api.state.introduced) {
-      api.state.introduced = true;
-      begin();
-    }
-  });
 }
 export const forgeTest = {
   commands: ["!quack"],
