@@ -387,7 +387,13 @@ export class ForgeLoop {
             : "",
         );
       }
-      if (result.rejected.length) this.options.announce(worldOnlyReason);
+      if (
+        ideas.some(
+          (idea) =>
+            idea.source === "twitch" && result.rejected.includes(idea.id),
+        )
+      )
+        this.options.announce(worldOnlyReason);
       this.store.addTokens(result.tokens);
       round.cards = result.cards;
       this.stage(round, "VOTING", this.now() + presets[this.preset].vote);

@@ -773,7 +773,7 @@ function render(time: number): void {
   ctx.fillStyle = connected ? "#8fd3a4" : "#e88a75";
   ctx.fillText(
     connected
-      ? `● LIVE · SEASON ${forge?.season ?? 1} · ROUND ${forge?.round?.id ?? forge?.build?.id ?? 0}`
+      ? `● LIVE · SEASON ${forge?.season ?? 1} · ROUND ${forge?.round?.number ?? forge?.build?.number ?? forge?.round?.id ?? forge?.build?.id ?? 0}`
       : "● CONNECTING",
     38,
     98,

@@ -17,6 +17,49 @@ import { testCards } from "./forge-fixtures.js";
 import { goodMod } from "./forge-fixtures.js";
 
 afterEach(() => vi.useRealTimers());
+it.each(["simulator", "twitch"] as const)(
+  "announces rejected ideas only for Twitch authors (%s)",
+  async (source) => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    const f = await fixture(undefined, undefined, undefined, {
+      curate: async (ideas) => ({
+        cards: structuredClone(testCards),
+        rejected: ideas
+          .filter((idea) => idea.source === source)
+          .map((idea) => idea.id),
+        tokens: 0,
+      }),
+    });
+    try {
+      f.inbox.add(
+        {
+          type: "chat",
+          source: "twitch",
+          userId: "real",
+          login: "real",
+          displayName: "RealViewer",
+          text: "hello",
+          badges: [],
+          isBroadcaster: false,
+          isMod: false,
+          emoteOnly: false,
+        },
+        "real unsafe example",
+        Date.now(),
+      );
+      f.loop.start("demo");
+      await vi.advanceTimersByTimeAsync(45000);
+      await f.loop.settled();
+      expect(
+        f.announcements.some((value) =>
+          value.includes("The forge only shapes"),
+        ),
+      ).toBe(source === "twitch");
+    } finally {
+      await f.cleanup();
+    }
+  },
+);
 it("does not serialize unapproved inbox ideas into overlay state", async () => {
   const f = await fixture();
   try {

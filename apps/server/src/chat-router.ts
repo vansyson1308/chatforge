@@ -111,7 +111,7 @@ export class IdeaInbox {
   pending(limit = 200): Idea[] {
     return this.db
       .prepare(
-        "SELECT * FROM ideas WHERE status IN ('pending','not chosen') ORDER BY id LIMIT ?",
+        "SELECT * FROM ideas WHERE status IN ('pending','not chosen') ORDER BY CASE WHEN source='twitch' THEN 0 ELSE 1 END, id LIMIT ?",
       )
       .all(limit)
       .map((row) => ideaSchema.parse(row));

@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createServer } from "node:net";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { ForgeStore } from "./forge-store.js";
 const exec = promisify(execFile);
 it("creates a fresh empty season while preserving Twitch tokens and historical data", async () => {
   const tmp = resolve("runtime/tmp");
@@ -46,6 +47,16 @@ it("creates a fresh empty season while preserving Twitch tokens and historical d
           .prepare("SELECT value FROM settings WHERE key='demo-empty-mods'")
           .get()?.value,
       ).toBe("true");
+      const store = new ForgeStore(check);
+      const first = store.createRound(1);
+      const second = store.createRound(2);
+      expect([first.number, second.number]).toEqual([1, 2]);
+      check.prepare("INSERT INTO seasons(startedAt) VALUES(?)").run(3);
+      const nextSeason = new ForgeStore(check);
+      const next = nextSeason.createRound(4);
+      expect(next.id).toBeGreaterThan(second.id);
+      expect(next.number).toBe(1);
+      expect(new ForgeStore(check).latestRounds()[0]?.number).toBe(1);
     } finally {
       check.close();
     }

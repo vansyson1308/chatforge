@@ -27,6 +27,22 @@ const chat: Chat = {
   emoteOnly: false,
 };
 describe("chat input boundary", () => {
+  it("includes a newer Twitch idea even when 200 SIM ideas are pending", () => {
+    const inbox = new IdeaInbox(":memory:");
+    try {
+      for (let i = 0; i < 210; i++)
+        inbox.add(
+          { ...chat, source: "simulator", userId: String(i) },
+          `idea ${i}`,
+          i,
+        );
+      const real = inbox.add(chat, "a giant golden dragon", 211);
+      expect(inbox.pending()).toHaveLength(200);
+      expect(inbox.pending()[0]?.id).toBe(real?.id);
+    } finally {
+      inbox.close();
+    }
+  });
   it("paginates newest pending ideas without rendering the entire inbox", () => {
     const inbox = new IdeaInbox(":memory:");
     try {

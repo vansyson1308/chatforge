@@ -36,6 +36,38 @@ it("filters injection and unbounded-code requests before they enter the model pr
   for (const text of malicious) expect(prompt).not.toContain(text);
 });
 import { testCards } from "./forge-fixtures.js";
+it("prioritizes a moderated Twitch idea over SIM groups and retries a biased selection", async () => {
+  const real = {
+    ...idea(999, "a golden dragon breathes fire"),
+    source: "twitch" as const,
+    author: "RealViewer",
+  };
+  const sims = Array.from({ length: 210 }, (_, index) =>
+    idea(index + 1, `sim concept ${index}`),
+  );
+  const cards = vi.fn(async () => ({
+    value: {
+      cards: testCards.map((card, i) => ({
+        ...card,
+        groupIds: cards.mock.calls.length === 1 ? [] : i === 0 ? [0] : [],
+      })),
+    },
+    tokens: 4,
+  }));
+  const moderate = vi.fn(async (texts: string[]) => texts.map(() => false));
+  const result = await new ForgeProducer({ moderate, cards }).curate(
+    [...sims, real],
+    [],
+    new AbortController().signal,
+  );
+  expect(moderate.mock.calls[0]![0][0]).toBe(real.text);
+  expect(result.cards[0]!.credits).toEqual([
+    { id: real.userId, name: "RealViewer", source: "twitch" },
+  ]);
+  expect(result.cards[0]!.ideaIds).toContain(real.id);
+  expect(cards).toHaveBeenCalledTimes(2);
+  expect(result.tokens).toBe(8);
+});
 it("moderates, merges duplicate credits, canonicalizes names and labels fillers", async () => {
   const input = [
     idea(1, "rain rubber ducks"),

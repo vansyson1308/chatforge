@@ -35,6 +35,13 @@ export class ForgeStore {
     );
     const round: ForgeRound = {
       id,
+      number: Number(
+        this.db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM rounds WHERE season=? AND id<=?",
+          )
+          .get(this.season, id)?.count,
+      ),
       stage: "IDLE",
       startedAt: now,
       deadline: null,
@@ -67,11 +74,21 @@ export class ForgeStore {
   latestRounds(): ForgeRound[] {
     return this.db
       .prepare(
-        `SELECT data FROM rounds WHERE season=?
+        `SELECT id,data FROM rounds WHERE season=?
          ORDER BY CASE WHEN json_extract(data,'$.stage') IN ('BUILDING','TESTING','DEPLOYING','CURATING') THEN 0 ELSE 1 END, id DESC LIMIT 2`,
       )
       .all(this.season)
-      .map((r) => JSON.parse(String(r.data)) as ForgeRound);
+      .map((r) => {
+        const round = JSON.parse(String(r.data)) as ForgeRound;
+        round.number ??= Number(
+          this.db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM rounds WHERE season=? AND id<=?",
+            )
+            .get(this.season, Number(r.id))?.count,
+        );
+        return round;
+      });
   }
   vote(round: number, viewer: string, choice: number): number[] {
     this.db

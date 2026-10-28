@@ -18,7 +18,7 @@ We had to keep untrusted chat and generated code away from host execution, prese
 
 ## Accomplishments we're proud of
 
-A 45-minute SIM-only soak shipped 21 of 21 real builds. A separate Twitch plus SIM run shipped three of three on their first attempt, with a 40.3-second median build time, and confirmed the outbound announcements. The earlier suite passed 185 tests on the final product pass. These are reported measurements, not claims that every generated mod will pass.
+A 45-minute SIM-only soak shipped 21 of 21 real builds. A separate Twitch plus SIM run shipped three of three on their first attempt, with a 40.3-second median build time, and confirmed the outbound announcements. A later Twitch recording captured real chat and two more showcases. The latest local suite passed 190 tests. These are measured runs, not claims that every generated mod will pass.
 
 ## What we learned
 
@@ -26,7 +26,7 @@ The on-stream moment matters as much as the compiler result. We also learned to 
 
 ## What's next for ChatForge
 
-Complete the public Twitch recording and upload, broaden accessibility and mod authoring tools, and continue improving admission checks and observability based on real streams.
+Broaden accessibility and mod authoring tools, and continue improving admission checks and observability based on real streams.
 
 ## Built with
 

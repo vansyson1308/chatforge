@@ -130,6 +130,7 @@ export interface GateReport {
 }
 export interface ForgeRound {
   id: number;
+  number?: number;
   stage: ForgeStage;
   deadline: number | null;
   startedAt: number;
@@ -184,6 +185,7 @@ const gateReportSchema = z.object({
   effects: z.number(),
 });
 const roundSchema = z.object({
+  number: z.number().int().positive().optional(),
   id: z.number(),
   stage: stageSchema,
   deadline: z.number().nullable(),
