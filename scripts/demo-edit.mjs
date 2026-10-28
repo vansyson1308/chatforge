@@ -104,7 +104,7 @@ const scenes = [
     length: 12,
     speed: 4,
     narration:
-      "Viewers pitch ideas in chat. Local rules and moderation keep unapproved ideas off the broadcast.",
+      "A real viewer pitches a golden dragon in Twitch chat. Rules and moderation keep unsafe ideas off the broadcast.",
   },
   {
     stage: "VOTING",
@@ -112,7 +112,7 @@ const scenes = [
     length: 10,
     speed: 4,
     narration:
-      "The Producer turns community ideas into cards. Chat votes on what happens next.",
+      "The Producer turns that idea into card one, next to two others. Chat votes, and the dragon wins.",
   },
   {
     stage: "BUILDING",
@@ -139,7 +139,7 @@ const scenes = [
     length: 14,
     speed: 1,
     narration:
-      "The winning idea ships into the running game, credits its contributors and gets a live showcase.",
+      "Keep Calm and Roar ships into the running game, credited to the viewer who pitched it. Now chat can roar on command.",
   },
   {
     stage: "architecture",

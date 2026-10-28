@@ -4,7 +4,7 @@
 
 ![A community-built keep and its giant crab showcase](docs/media/hud/final-showcase.png)
 
-[Watch the 3-minute demo](YOUTUBE_URL_TBD) · [Architecture](docs/ARCHITECTURE.md) · [Devpost](docs/DEVPOST.md) · [Live evidence](docs/media/hud/README.md)
+[Watch the demo (2:14)](YOUTUBE_URL_TBD) · [Architecture](docs/ARCHITECTURE.md) · [Devpost](docs/DEVPOST.md) · [Live evidence](docs/media/hud/README.md)
 
 ## What it does
 
@@ -26,7 +26,7 @@ flowchart LR
 
 Codex built ChatForge from an empty folder in one main working thread, guided by the lead prompts in [`brief/prompts/`](brief/prompts/) and documented in the [Codex journey](docs/CODEX_JOURNEY.md). Separately, the **Codex SDK is the live Builder inside ChatForge**: it writes each candidate mod in a restricted workspace and runs the local test before the host independently gates it.
 
-Evidence: the 45-minute SIM soak delivered **21/21 real builds LIVE**; a Twitch + SIM verification shipped **3/3 on attempt one**, with a median build time of **40.3 seconds** ([report](docs/media/hud/final-live-report.json)). A subsequent public Twitch recording captured two more shipped showcases and real chat. The latest local suite passed **244 tests**; the project had **19 commits** before the real-take fixes. A [live moderation corpus](docs/media/moderation-live-report.json) passed **26/26** expected decisions, including both real dragon ideas. These are measurements of those runs, not guarantees for future builds.
+Evidence: the 45-minute SIM soak delivered **21/21 real builds LIVE**; a Twitch + SIM verification shipped **3/3 on attempt one**, with a median build time of **40.3 seconds** ([report](docs/media/hud/final-live-report.json)). A subsequent public Twitch recording captured two more shipped showcases and real chat. In the final demo take, a real Twitch idea from @vansyson1308 became card one, won the chat vote and shipped as Keep Calm and Roar, credited to that account; the Builder used API-key auth for that run. The latest local suite passed **249 tests**; the project had **19 commits** before the real-take fixes. A [live moderation corpus](docs/media/moderation-live-report.json) passed **26/26** expected decisions, including both real dragon ideas. These are measurements of those runs, not guarantees for future builds.
 
 ## Safety and honesty
 

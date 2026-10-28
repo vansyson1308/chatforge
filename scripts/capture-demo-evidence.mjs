@@ -1,4 +1,4 @@
-/* global document */
+﻿/* global document */
 import { chromium } from "playwright-core";
 import { DatabaseSync } from "node:sqlite";
 import { execFileSync } from "node:child_process";
@@ -69,8 +69,8 @@ export async function captureEvidence(take, timeline) {
       ({ commits, prompts, thread }) => {
         const container = document.getElementById("stats");
         for (const text of [
-          `${commits} repository commits • ${prompts} lead prompts`,
-        "190 tests verified in the latest local suite",
+          `${commits} repository commits \u2022 ${prompts} lead prompts`,
+          "249 tests verified in the latest local suite",
           "21 real builds LIVE in the 45-minute SIM soak",
           "40.3 s median build in the 3-round Twitch + SIM verification",
           `Codex SDK build thread: ${thread}`,

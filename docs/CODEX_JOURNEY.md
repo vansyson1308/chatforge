@@ -196,3 +196,7 @@ Moderated Twitch intake receives one addressed acknowledgement, selected cards r
 Demo titles moved below the HUD into a dedicated band above captions. `demo:edit <new-take> --moderation-from <old-take>` uses the old take's actual chat capture, duration and reviewed highlights, labelled as an earlier real Twitch take. Invalid annotations fail explicitly. Actual take-1 frames were decoded and visually reviewed for title placement and moderation framing; no new take or Twitch message was produced. Take 3 remains the lead's real-world confirmation of idea → card → vote → build → showcase.
 
 Verification: typecheck, lint, 244 unit/security/integration tests, EventSub E2E, both isolated performance gates and build passed locally. The 26-case live moderation check passed. CI is checked on the pushed commit. Temporary frame proofs are removed and `pnpm clean:runtime` preserves both recordings and credentials.
+
+## Final polish (after Codex usage ran out)
+
+The ChatGPT plan's Codex allowance ran out before the final cut. The remaining fixes were made outside Codex: an opt-in `CODEX_AUTH=apikey` mode for the product's Builder, Producer resilience (relaxed real-viewer priority, last-valid fallback, automatic reopen after a failed round), QuickJS initialisation on season resume, props kept below the HUD, narration and the stats card. Local verification: typecheck, lint and 249 tests passed. The final take shows a real Twitch idea winning and shipping; its moderation close-up comes from the preceding take.
